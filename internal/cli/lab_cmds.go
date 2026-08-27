@@ -20,11 +20,11 @@ func newStartCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "Levanta el laboratorio y actualiza las credenciales de AWS",
-		Long: `Levanta el Learner Lab, espera a que esté listo y guarda sus credenciales.
+		Short: "Bring the lab up and refresh the AWS credentials",
+		Long: `Brings the Learner Lab up, waits until it is ready and saves its credentials.
 
-Es idempotente: si el laboratorio ya está corriendo no lo reinicia, solo
-refresca las credenciales. Podés llamarlo cuantas veces quieras.`,
+It is idempotent: if the lab is already running it does not restart it, it only
+refreshes the credentials. You can call it as many times as you like.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			app, err := newApp(flagDebugHTTP)
@@ -37,7 +37,7 @@ refresca las credenciales. Podés llamarlo cuantas veces quieras.`,
 			if err != nil {
 				return err
 			}
-			progress("laboratorio: %s", disc.CourseName)
+			progress("lab: %s", disc.CourseName)
 
 			st, err := lab.Status(ctx)
 			if err != nil {
@@ -45,9 +45,9 @@ refresca las credenciales. Podés llamarlo cuantas veces quieras.`,
 			}
 
 			if st.Running() {
-				progress("ya estaba corriendo, refresco las credenciales")
+				progress("already running, refreshing the credentials")
 			} else {
-				progress("arrancando…")
+				progress("starting…")
 				if err := lab.Start(ctx); err != nil {
 					return err
 				}
@@ -55,18 +55,18 @@ refresca las credenciales. Podés llamarlo cuantas veces quieras.`,
 					if flagJSON {
 						return printJSON(map[string]any{"state": string(vocareum.StateStarting)})
 					}
-					fmt.Println("Arranque pedido. Consultá el progreso con: awsacademy status")
+					fmt.Println("Start requested. Check the progress with: awsacademy status")
 					return nil
 				}
 				st, err = lab.WaitForRunning(ctx, timeout, func(s vocareum.Status) {
-					progress("  estado: %s", s.State)
+					progress("  state: %s", s.State)
 				})
 				if err != nil {
 					return err
 				}
 			}
 
-			// Vocareum sirve credenciales y contador en la misma respuesta.
+			// Vocareum serves credentials and countdown in the same response.
 			detail, creds, err := lab.Details(ctx)
 			if err != nil {
 				return err
@@ -81,8 +81,8 @@ refresca las credenciales. Podés llamarlo cuantas veces quieras.`,
 
 			profile := app.cfg.AWSProfile
 			target := "credential_process"
-			// Escribimos el fichero compartido si el usuario lo pidió o si es
-			// como su perfil está configurado; si no, la caché ya alcanza.
+			// We write the shared file if the user asked for it or if that is
+			// how their profile is configured; otherwise the cache is enough.
 			if writeShared || awscreds.CredentialProcessCommand(profile) == "" {
 				if err := awscreds.WriteSharedCredentials(profile, creds); err != nil {
 					return err
@@ -94,11 +94,11 @@ refresca las credenciales. Podés llamarlo cuantas veces quieras.`,
 		},
 	}
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Minute,
-		"cuánto esperar a que el laboratorio esté listo")
+		"how long to wait for the lab to be ready")
 	cmd.Flags().BoolVar(&writeShared, "write-credentials", false,
-		"escribir además el perfil en ~/.aws/credentials")
+		"also write the profile into ~/.aws/credentials")
 	cmd.Flags().BoolVar(&noWait, "no-wait", false,
-		"pedir el arranque y salir sin esperar")
+		"request the start and exit without waiting")
 	return cmd
 }
 
@@ -129,18 +129,18 @@ func reportStart(ctx context.Context, app *App, st *vocareum.Status,
 		return printJSON(out)
 	}
 
-	fmt.Printf("\nLaboratorio listo.\n")
+	fmt.Printf("\nLab ready.\n")
 	if st.Remaining > 0 {
-		fmt.Printf("  queda        %s de sesión\n", st.Remaining.Round(time.Second))
+		fmt.Printf("  remaining    %s of session\n", st.Remaining.Round(time.Second))
 	}
 	if st.BudgetTotal > 0 {
-		fmt.Printf("  presupuesto  $%.2f de $%.2f\n", st.BudgetUsed, st.BudgetTotal)
+		fmt.Printf("  budget       $%.2f of $%.2f\n", st.BudgetUsed, st.BudgetTotal)
 	}
-	fmt.Printf("  perfil       %s -> %s\n", profile, target)
+	fmt.Printf("  profile      %s -> %s\n", profile, target)
 	if valErr != nil {
-		// No es fatal: las credenciales están guardadas y puede ser un
-		// problema de red, pero el usuario tiene que enterarse.
-		fmt.Printf("  %s no pude verificarlas contra AWS: %v\n", mark(false), valErr)
+		// Not fatal: the credentials are saved and this may be a network
+		// problem, but the user has to hear about it.
+		fmt.Printf("  %s could not verify them against AWS: %v\n", mark(false), valErr)
 		return nil
 	}
 	fmt.Printf("  %s %s\n", mark(true), identity.ARN)
@@ -150,11 +150,11 @@ func reportStart(ctx context.Context, app *App, st *vocareum.Status,
 func newStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
-		Short: "Detiene el laboratorio",
-		Long: `Detiene el Learner Lab.
+		Short: "Stop the lab",
+		Long: `Stops the Learner Lab.
 
-Los recursos que hayas creado siguen existiendo entre sesiones, pero las
-credenciales dejan de servir hasta el próximo 'start'.`,
+The resources you created survive between sessions, but the credentials stop
+working until the next 'start'.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			app, err := newApp(flagDebugHTTP)
@@ -171,8 +171,8 @@ credenciales dejan de servir hasta el próximo 'start'.`,
 				return err
 			}
 
-			// Las credenciales cacheadas ya no valen nada: dejarlas solo
-			// serviría para que el próximo comando falle de forma confusa.
+			// The cached credentials are now worthless: keeping them would only
+			// make the next command fail in a confusing way.
 			if creds, err := state.LoadCredentials(); err == nil {
 				creds.Expiration = time.Now()
 				_ = creds.Save()
@@ -181,7 +181,7 @@ credenciales dejan de servir hasta el próximo 'start'.`,
 			if flagJSON {
 				return printJSON(map[string]any{"state": string(vocareum.StateStopping)})
 			}
-			fmt.Println("Laboratorio detenido.")
+			fmt.Println("Lab stopped.")
 			return nil
 		},
 	}
@@ -190,26 +190,26 @@ credenciales dejan de servir hasta el próximo 'start'.`,
 func newCredsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "creds",
-		Short: "Emite las credenciales en el formato de credential_process",
-		Long: `Escribe las credenciales del laboratorio como JSON en stdout, en el
-formato que espera credential_process del AWS CLI.
+		Short: "Emit the credentials in the credential_process format",
+		Long: `Writes the lab credentials as JSON on stdout, in the format the AWS
+CLI's credential_process expects.
 
-Está pensado para que lo invoque el AWS CLI, no para usarlo a mano. Se declara
-en ~/.aws/config:
+It is meant to be invoked by the AWS CLI, not used by hand. It is declared in
+~/.aws/config:
 
   [profile academy]
   credential_process = awsacademy creds
 
-No levanta el laboratorio si está apagado: cada comando 'aws' se quedaría
-colgado varios minutos esperando. Falla rápido y te dice qué hacer.`,
+It does not bring the lab up when it is down: every 'aws' command would hang
+for several minutes waiting. It fails fast and tells you what to do.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			creds, err := state.LoadCredentials()
 			if err != nil || creds.Expired() {
-				// Este mensaje lo ve el usuario a través del AWS CLI, así que
-				// tiene que decir exactamente qué comando lo arregla.
+				// The user sees this message through the AWS CLI, so it has to
+				// name the exact command that fixes it.
 				return fmt.Errorf(
-					"no hay credenciales vigentes del laboratorio: ejecutá 'awsacademy start'")
+					"no valid lab credentials: run 'awsacademy start'")
 			}
 			out, err := awscreds.ProcessOutput(creds)
 			if err != nil {
@@ -221,8 +221,8 @@ colgado varios minutos esperando. Falla rápido y te dice qué hacer.`,
 	}
 }
 
-// progress informa el avance por stderr, para no ensuciar una salida --json
-// que un script pueda estar canalizando.
+// progress reports progress on stderr, so as not to pollute a --json output
+// that a script may be piping.
 func progress(format string, args ...any) {
 	if flagJSON {
 		return

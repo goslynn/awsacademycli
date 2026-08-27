@@ -1,9 +1,8 @@
-// Command awsacademy controla el AWS Academy Learner Lab desde la terminal.
+// Command awsacademy controls the AWS Academy Learner Lab from the terminal.
 //
-// Levanta y baja el laboratorio y mantiene el perfil de AWS CLI con
-// credenciales frescas, haciendo por debajo el mismo recorrido que haría una
-// persona con un navegador: login en Canvas, lanzamiento LTI y control del
-// laboratorio en Vocareum.
+// It brings the lab up and down and keeps the AWS CLI profile stocked with
+// fresh credentials, following underneath the same round trip a person with a
+// browser would: Canvas login, LTI launch and lab control on Vocareum.
 package main
 
 import (
@@ -15,21 +14,21 @@ import (
 	"github.com/goslynn/awsacademycli/internal/cli"
 )
 
-// version la fija el linker en las builds de release:
+// version is set by the linker in release builds:
 //
 //	go build -ldflags "-X main.version=$(git describe --tags)" ./cmd/awsacademy
 var version = "dev"
 
 func main() {
-	// El primer Ctrl+C cancela el trabajo en curso, que puede ser una espera de
-	// varios minutos, y deja que la herramienta salga ordenadamente.
+	// The first Ctrl+C cancels the work in progress, which may be a wait of
+	// several minutes, and lets the tool exit in an orderly fashion.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Instalar un manejador desactiva la terminación por defecto, así que si
-	// algo no atendiera la cancelación el proceso quedaría colgado e
-	// inmatable con Ctrl+C. Devolver el comportamiento normal en cuanto llega
-	// la primera señal hace que un segundo Ctrl+C siempre funcione.
+	// Installing a handler disables the default termination, so if something
+	// failed to honour the cancellation the process would hang and become
+	// unkillable with Ctrl+C. Restoring the normal behaviour as soon as the
+	// first signal arrives makes a second Ctrl+C always work.
 	go func() {
 		<-ctx.Done()
 		stop()

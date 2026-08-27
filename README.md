@@ -1,178 +1,186 @@
 # awsacademycli
 
-Controla el [AWS Academy Learner Lab](https://awsacademy.instructure.com) desde la terminal.
+Control the [AWS Academy Learner Lab](https://awsacademy.instructure.com) from the terminal.
 
-Hace por vos el recorrido de siempre —entrar a Canvas, abrir el laboratorio, pulsar
-*Start Lab*, esperar, abrir *AWS Details* y copiar las tres claves a `~/.aws/credentials`—
-y lo reduce a un comando. Como las credenciales del laboratorio duran unas pocas horas,
-ese recorrido se repite varias veces al día.
+It does the usual round trip for you — log in to Canvas, open the lab, press
+*Start Lab*, wait, open *AWS Details* and copy the three keys into
+`~/.aws/credentials` — and reduces it to a single command. Because lab
+credentials only last a few hours, that round trip repeats several times a day.
 
 ```console
 $ awsacademy start
-laboratorio: AWS Academy Learner Lab
-arrancando…
-  estado: arrancando
-  estado: corriendo
+lab: AWS Academy Learner Lab
+starting…
+  state: starting
+  state: running
 
-Laboratorio listo.
-  queda        3h58m0s de sesión
-  perfil       academy -> credential_process
+Lab ready.
+  remaining    3h58m0s of session
+  profile      academy -> credential_process
   ✓ arn:aws:sts::123456789012:assumed-role/voclabs/user1234567
 ```
 
-## Instalación
+## Installation
 
-Necesita Go 1.24 o superior. No necesita navegador ni ninguna otra dependencia.
+Requires Go 1.24 or later. No browser and no other dependency.
 
 ```console
 $ go install github.com/goslynn/awsacademycli/cmd/awsacademy@latest
 ```
 
-Desde el repositorio:
+From the repository:
 
 ```console
 $ CGO_ENABLED=0 go build -o awsacademy ./cmd/awsacademy
 ```
 
-## Uso
+## Usage
 
 ```console
-$ awsacademy setup     # una vez: guarda tus credenciales y localiza el laboratorio
-$ awsacademy start     # levanta el laboratorio y actualiza el perfil de AWS
-$ awsacademy courses   # lista tus cursos y fija cuál tiene el laboratorio
-$ awsacademy status    # ¿puedo trabajar? ¿cuánto tiempo me queda?
-$ awsacademy stop      # baja el laboratorio
+$ awsacademy setup     # once: saves your credentials and locates the lab
+$ awsacademy start     # brings the lab up and refreshes the AWS profile
+$ awsacademy courses   # lists your courses and pins the one with the lab
+$ awsacademy status    # can I work? how much time is left?
+$ awsacademy stop      # brings the lab down
 ```
 
-### Evitar `--profile` en cada comando
+### Avoiding `--profile` on every command
 
 ```console
 $ awsacademy default-profile
 ```
 
-Apunta el perfil `default` de `~/.aws/config` al mismo proveedor. A partir de
-ahí, `aws sts get-caller-identity` funciona sin más, igual que
+Points the `default` profile in `~/.aws/config` at the same provider. From then
+on, `aws sts get-caller-identity` just works, exactly like
 `--profile academy`.
 
-Se resuelve en la configuración de AWS, no en el shell, así que funciona igual
-en cualquier distribución, con cualquier shell, y también en macOS y Windows.
-No usa variables de entorno ni toca tus ficheros de arranque.
+It is resolved in the AWS configuration, not in the shell, so it behaves the
+same on any distribution, with any shell, and on macOS and Windows too. It uses
+no environment variables and never touches your startup files.
 
-> Nunca pisa un perfil por defecto ajeno en silencio: si ya hay claves
-> estáticas, otro `credential_process`, una sesión SSO o un rol asumido, avisa
-> de qué encontró y pide confirmación. `--undo` lo deshace, y solo retira lo que
-> puso: los ajustes que hubieras añadido a mano se quedan.
+> It never silently clobbers someone else's default profile: if static keys,
+> another `credential_process`, an SSO session or an assumed role are already
+> there, it reports what it found and asks for confirmation. `--undo` reverses
+> it, and removes only what it added: settings you wrote by hand stay put.
 
-Para algo puntual en una sola sesión existe además `eval "$(awsacademy env)"`,
-que exporta `AWS_PROFILE`.
+For a one-off in a single session there is also `eval "$(awsacademy env)"`,
+which exports `AWS_PROFILE`.
 
-## Cómo entrega las credenciales
+## How it delivers credentials
 
-Por defecto configura `credential_process` en `~/.aws/config`:
+By default it configures `credential_process` in `~/.aws/config`:
 
 ```ini
 [profile academy]
-credential_process = /home/vos/go/bin/awsacademy creds
+credential_process = /home/you/go/bin/awsacademy creds
 region = us-east-1
 ```
 
-Así el AWS CLI le pide las credenciales a esta herramienta cuando las necesita, las
-cachea y las renueva sola, sin que queden credenciales vencidas escritas en disco.
+That way the AWS CLI asks this tool for credentials when it needs them, caches
+them and renews them on its own, so no expired credentials are left on disk.
 
-> **Ojo con la precedencia.** Dentro de un mismo perfil, las claves estáticas de
-> `~/.aws/credentials` tienen prioridad sobre el `credential_process` de
-> `~/.aws/config`. Si dejás las dos cosas, el proveedor queda de adorno y seguirás
-> usando credenciales muertas. `setup` detecta esta colisión y se ofrece a limpiarla.
+> **Mind the precedence.** Within a single profile, the static keys in
+> `~/.aws/credentials` take priority over the `credential_process` in
+> `~/.aws/config`. If you leave both in place, the provider is decorative and
+> you keep using dead credentials. `setup` detects this collision and offers to
+> clean it up.
 
-Si preferís el modo clásico, `awsacademy start --write-credentials` escribe el perfil
-en `~/.aws/credentials` preservando el resto de tus perfiles.
+If you prefer the classic mode, `awsacademy start --write-credentials` writes
+the profile into `~/.aws/credentials`, preserving your other profiles.
 
-## Ficheros
+## Files
 
-| Ruta | Contenido |
+| Path | Contents |
 |---|---|
-| `~/.config/awsacademy/config.toml` | Credenciales de AWS Academy y curso elegido. Permisos **0600**, obligatorios |
-| `~/.local/state/awsacademy/session.json` | Cookies de la sesión |
-| `~/.local/state/awsacademy/discovery.json` | Qué curso, qué ítem y qué endpoints son el laboratorio |
-| `~/.local/state/awsacademy/creds.json` | Últimas credenciales, caché de `credential_process` |
+| `~/.config/awsacademy/config.toml` | AWS Academy credentials and chosen course. Permissions **0600**, required |
+| `~/.local/state/awsacademy/session.json` | Session cookies |
+| `~/.local/state/awsacademy/discovery.json` | Which course, which item and which endpoints are the lab |
+| `~/.local/state/awsacademy/creds.json` | Latest credentials, `credential_process` cache |
 
-Todo lo de `state/` es caché reconstruible: se puede borrar sin perder nada.
+Everything under `state/` is a rebuildable cache: it can be deleted without
+losing anything.
 
-En vez de guardar la contraseña en claro podés delegar en un gestor externo:
+Instead of storing the password in the clear you can delegate to an external
+manager:
 
 ```toml
 password_command = "pass show aws/academy"
 ```
 
-## Cómo funciona
+## How it works
 
-No usa navegador. El recorrido completo, tal como se verificó contra el servicio real:
+No browser involved. The complete round trip, as verified against the real
+service:
 
-1. **Login en Canvas.** Sirve su login con React, pero por debajo sigue siendo Rails
-   clásico: un POST a `/login/canvas` con el token CSRF que viene en una cookie. Sin
-   captcha. Se pide `remember_me`, así que la cookie persistente dura semanas y la
-   contraseña casi nunca hace falta.
-2. **Descubrimiento por API.** Canvas expone su API REST a la sesión, así que el curso
-   y el ítem del laboratorio se resuelven en JSON en vez de scrapeando menús. Un curso
-   típico tiene siete ítems de herramienta externa y casi todos mencionan el
-   "Laboratorio de aprendizaje" —la guía, las demostraciones, las preguntas frecuentes—
-   así que se eligen por proveedor LTI, no por título.
-3. **Lanzamiento LTI 1.3.** El formulario firmado no está en el iframe: Canvas lo deja
-   en `about:blank` y lo rellena por JavaScript. El formulario de verdad está oculto en
-   la propia página, marcado con `data-message-type="tool_launch"`. A partir de ahí el
-   baile OIDC —`oidc_login.php`, `authorize_redirect`, `authorize`, y el `id_token`
-   devuelto en un formulario auto-enviado— es solo seguir redirects y reenviar
-   formularios. El mismo mecanismo cubre LTI 1.1, así que no hace falta saber de
-   antemano qué versión usa el curso.
-4. **Trampolines de Vocareum.** El proveedor no sirve el panel directamente: devuelve
-   dos páginas cuyo único contenido es un script que navega a la siguiente
-   (`launch.php` → `main.php?m=editor` → `main.php?m=clabide`). No hace falta un motor
-   de JavaScript para seguirlas, solo leer la URL.
-5. **La API del laboratorio.** Vocareum atiende todo por `util/vcput.php` y distingue la
-   operación con `a=`: `startaws`, `endaws`, `getawsstatus`, `getaws`. Esas URLs llevan
-   un `stepid` propio de la sesión, así que **no se pueden compilar como constantes**:
-   se leen de la página del laboratorio, que es donde sus propios botones las declaran.
+1. **Canvas login.** It serves its login with React, but underneath it is still
+   classic Rails: a POST to `/login/canvas` with the CSRF token that arrives in
+   a cookie. No captcha. `remember_me` is requested, so the persistent cookie
+   lasts weeks and the password is almost never needed.
+2. **API discovery.** Canvas exposes its REST API to the session, so the course
+   and the lab item are resolved in JSON instead of by scraping menus. A typical
+   course has seven external-tool items and nearly all of them mention the
+   "learner lab" — the guide, the demos, the FAQ — so they are picked by LTI
+   provider, not by title.
+3. **LTI 1.3 launch.** The signed form is not in the iframe: Canvas leaves that
+   at `about:blank` and fills it in with JavaScript. The real form is hidden in
+   the page itself, marked with `data-message-type="tool_launch"`. From there
+   the OIDC dance — `oidc_login.php`, `authorize_redirect`, `authorize`, and the
+   `id_token` returned in a self-submitting form — is just following redirects
+   and resubmitting forms. The same mechanism covers LTI 1.1, so there is no
+   need to know in advance which version the course uses.
+4. **Vocareum bounce pages.** The provider does not serve the panel directly: it
+   returns two pages whose only content is a script that navigates to the next
+   one (`launch.php` → `main.php?m=editor` → `main.php?m=clabide`). Following
+   them needs no JavaScript engine, only reading the URL.
+5. **The lab API.** Vocareum serves everything through `util/vcput.php` and
+   distinguishes the operation with `a=`: `startaws`, `endaws`, `getawsstatus`,
+   `getaws`. Those URLs carry a `stepid` specific to the session, so they
+   **cannot be compiled in as constants**: they are read from the lab page,
+   which is where its own buttons declare them.
 
-**Nada de esto está hardcodeado.** El curso cambia cada término, con él cambian todas
-las URLs, y los identificadores de sesión cambian en cada lanzamiento. Todo se
-re-descubre cuando hace falta.
+**None of this is hardcoded.** The course changes every term, all the URLs change
+with it, and the session identifiers change on every launch. Everything is
+rediscovered when needed.
 
-## Desarrollo
+## Development
 
 ```console
-$ go test ./...          # nada de esto toca la red
+$ go test ./...          # none of this touches the network
 $ gofmt -l . && go vet ./...
 ```
 
-Los tests levantan un Canvas y un Vocareum simulados y ejercitan la cadena entera,
-incluido el auto-submit del formulario firmado.
+The tests stand up a simulated Canvas and Vocareum and exercise the whole chain,
+including the auto-submit of the signed form.
 
-### Diagnosticar el descubrimiento
+### Diagnosing discovery
 
-Si el laboratorio deja de responder, lo primero es ver qué expone la página:
+If the lab stops responding, the first step is to see what the page exposes:
 
 ```console
 $ awsacademy debug lab --scripts
 ```
 
-Atraviesa el lanzamiento LTI e imprime todas las rutas de endpoint que encuentra, más
-las que la herramienta está usando. No necesita navegador.
+It goes through the LTI launch and prints every endpoint path it finds, plus the
+ones the tool is using. No browser required.
 
-Cuando eso no alcance, se puede capturar el tráfico real:
+When that is not enough, you can capture the real traffic:
 
 ```console
-$ go run ./cmd/vockit -out captura.json
+$ go run ./cmd/vockit -out capture.json
 ```
 
-Abre un navegador, hacés el flujo a mano una vez y quedan volcados todos los XHR con su
-URL, método, cuerpo y respuesta. Los valores confirmados van a `discovery.json`, que
-tiene prioridad sobre las conjeturas compiladas: corregirlos no exige recompilar.
+It opens a browser, you do the flow by hand once, and every XHR is dumped with
+its URL, method, body and response. Confirmed values go into `discovery.json`,
+which takes priority over the compiled-in guesses: fixing them requires no
+rebuild.
 
-> La captura contiene cookies de sesión y credenciales en claro. No la publiques.
+> The capture contains session cookies and credentials in the clear. Do not
+> publish it.
 
-## Aviso
+## Notice
 
-Automatiza el acceso a tu propia cuenta con tus propias credenciales, haciendo el mismo
-recorrido que haría tu navegador. Aun así se comporta con moderación deliberada: un
-request en vuelo a la vez, sin paralelismo, backoff ante 429 y 5xx, y un User-Agent que
-se identifica en vez de disfrazarse de navegador.
+It automates access to your own account with your own credentials, following the
+same round trip your browser would. Even so, it behaves with deliberate
+restraint: one request in flight at a time, no parallelism, backoff on 429 and
+5xx, and a User-Agent that identifies itself instead of pretending to be a
+browser.

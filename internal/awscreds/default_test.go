@@ -11,7 +11,7 @@ const ourCmd = "/usr/local/bin/awsacademy creds"
 func TestDefaultProfileFreeWhenNothingConfigured(t *testing.T) {
 	useTempAWSDir(t)
 	if got := DefaultProfileConflict(ourCmd); got != "" {
-		t.Errorf("conflicto = %q, esperaba ninguno", got)
+		t.Errorf("conflict = %q, expected none", got)
 	}
 }
 
@@ -23,24 +23,24 @@ func TestDefaultProfileDetectsConflicts(t *testing.T) {
 		wantSubstr string
 	}{
 		{
-			// Las claves estáticas ganan sobre credential_process: si están,
-			// configurarlo no serviría de nada.
-			name:       "claves estáticas",
+			// The static keys win over credential_process: if they are there,
+			// configuring it would achieve nothing.
+			name:       "static keys",
 			creds:      "[default]\naws_access_key_id = AKIAREAL\naws_secret_access_key = s\n",
-			wantSubstr: "claves estáticas",
+			wantSubstr: "static keys",
 		},
 		{
-			name:       "otro credential_process",
-			config:     "[default]\ncredential_process = /usr/bin/otra-herramienta\n",
-			wantSubstr: "otra-herramienta",
+			name:       "another credential_process",
+			config:     "[default]\ncredential_process = /usr/bin/another-tool\n",
+			wantSubstr: "another-tool",
 		},
 		{
-			name:       "sesión SSO",
-			config:     "[default]\nsso_session = trabajo\nsso_account_id = 1234\n",
+			name:       "SSO session",
+			config:     "[default]\nsso_session = work\nsso_account_id = 1234\n",
 			wantSubstr: "sso_session",
 		},
 		{
-			name:       "rol asumido",
+			name:       "assumed role",
 			config:     "[default]\nrole_arn = arn:aws:iam::1234:role/Admin\nsource_profile = base\n",
 			wantSubstr: "role_arn",
 		},
@@ -58,10 +58,10 @@ func TestDefaultProfileDetectsConflicts(t *testing.T) {
 
 			got := DefaultProfileConflict(ourCmd)
 			if got == "" {
-				t.Fatal("esperaba detectar un conflicto")
+				t.Fatal("expected a conflict to be detected")
 			}
 			if !strings.Contains(got, tt.wantSubstr) {
-				t.Errorf("conflicto = %q, esperaba que mencionara %q", got, tt.wantSubstr)
+				t.Errorf("conflict = %q, expected it to mention %q", got, tt.wantSubstr)
 			}
 		})
 	}
@@ -72,18 +72,18 @@ func TestDefaultProfileOursIsNotAConflict(t *testing.T) {
 	if err := ConfigureDefaultProfile(ourCmd, "us-east-1"); err != nil {
 		t.Fatal(err)
 	}
-	// Volver a configurarlo cuando ya somos nosotros no debe pedir confirmación.
+	// Configuring it again when it is already us must not ask for confirmation.
 	if got := DefaultProfileConflict(ourCmd); got != "" {
-		t.Errorf("conflicto = %q, no debería haberlo con nuestro propio comando", got)
+		t.Errorf("conflict = %q, there should be none with our own command", got)
 	}
 	if !IsDefaultProfileOurs(ourCmd) {
-		t.Error("IsDefaultProfileOurs debería ser verdadero")
+		t.Error("IsDefaultProfileOurs should be true")
 	}
 }
 
 func TestConfigureDefaultProfilePreservesOtherProfiles(t *testing.T) {
 	useTempAWSDir(t)
-	existing := `[profile trabajo]
+	existing := `[profile work]
 region = eu-west-1
 sso_session = corp
 
@@ -97,27 +97,27 @@ credential_process = /usr/local/bin/awsacademy creds
 		t.Fatal(err)
 	}
 	got := readConfig(t)
-	for _, want := range []string{"[profile trabajo]", "sso_session", "eu-west-1", "[profile academy]", "[default]"} {
+	for _, want := range []string{"[profile work]", "sso_session", "eu-west-1", "[profile academy]", "[default]"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("falta %q en:\n%s", want, got)
+			t.Errorf("%q is missing from:\n%s", want, got)
 		}
 	}
 }
 
 func TestRemoveDefaultProfileOnlyRemovesOurs(t *testing.T) {
 	useTempAWSDir(t)
-	os.WriteFile(ConfigPath(), []byte("[default]\ncredential_process = /usr/bin/ajeno\n"), 0o644)
+	os.WriteFile(ConfigPath(), []byte("[default]\ncredential_process = /usr/bin/someone-else\n"), 0o644)
 
-	// No es nuestro, así que no se toca.
+	// It is not ours, so it is left alone.
 	removed, err := RemoveDefaultProfile(ourCmd)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if removed {
-		t.Error("no deberíamos retirar un credential_process ajeno")
+		t.Error("we should not withdraw someone else's credential_process")
 	}
-	if !strings.Contains(readConfig(t), "/usr/bin/ajeno") {
-		t.Error("el credential_process ajeno debería seguir ahí")
+	if !strings.Contains(readConfig(t), "/usr/bin/someone-else") {
+		t.Error("the other credential_process should still be there")
 	}
 }
 
@@ -133,22 +133,22 @@ func TestRemoveDefaultProfileKeepsUserSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !removed {
-		t.Fatal("esperaba que lo retirara")
+		t.Fatal("expected it to be withdrawn")
 	}
 
 	got := readConfig(t)
 	if strings.Contains(got, "credential_process") {
-		t.Errorf("debería haberse quitado:\n%s", got)
+		t.Errorf("it should have been removed:\n%s", got)
 	}
-	// La region que la persona puso a mano no es nuestra: se queda.
+	// The region the person set by hand is not ours: it stays.
 	if !strings.Contains(got, "sa-east-1") || !strings.Contains(got, "table") {
-		t.Errorf("se perdieron ajustes del usuario:\n%s", got)
+		t.Errorf("user settings were lost:\n%s", got)
 	}
 }
 
 func TestRemoveDefaultProfileDropsEmptySection(t *testing.T) {
 	useTempAWSDir(t)
-	// Sin region previa, la sección la creamos nosotros enteramente...
+	// With no prior region, the section is entirely ours...
 	os.WriteFile(ConfigPath(), []byte(""), 0o644)
 	if err := ConfigureDefaultProfile(ourCmd, ""); err != nil {
 		t.Fatal(err)
@@ -156,9 +156,9 @@ func TestRemoveDefaultProfileDropsEmptySection(t *testing.T) {
 	if _, err := RemoveDefaultProfile(ourCmd); err != nil {
 		t.Fatal(err)
 	}
-	// ...así que al retirarnos no debería quedar una sección vacía de recuerdo.
+	// ...so once we withdraw, no empty section should be left behind.
 	if got := readConfig(t); strings.Contains(got, "[default]") {
-		t.Errorf("la sección vacía debería desaparecer:\n%s", got)
+		t.Errorf("the empty section should be gone:\n%s", got)
 	}
 }
 

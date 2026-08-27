@@ -9,24 +9,23 @@ import (
 	"time"
 )
 
-// bloqueante simula una entrada que nunca entrega datos, como un terminal
-// esperando a que alguien teclee.
-type bloqueante struct{}
+// blocking simulates an input that never delivers data, like a terminal waiting
+// for someone to type.
+type blocking struct{}
 
-func (bloqueante) Read([]byte) (int, error) {
-	select {} // nunca retorna
+func (blocking) Read([]byte) (int, error) {
+	select {} // never returns
 }
 
 func TestPromptRespondsToCancellation(t *testing.T) {
-	// Este es el fallo que motivó todo esto: sin atender al contexto, un
-	// Ctrl+C durante una pregunta dejaba el proceso colgado para siempre,
-	// porque instalar un manejador de señales desactiva la terminación
-	// por defecto.
+	// This is the bug that motivated all of it: without honouring the context,
+	// a Ctrl+C during a question left the process hanging forever, because
+	// installing a signal handler disables the default termination.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := Prompt(ctx, bloqueante{}, "Email: ")
+		_, err := Prompt(ctx, blocking{}, "Email: ")
 		done <- err
 	}()
 
@@ -35,10 +34,10 @@ func TestPromptRespondsToCancellation(t *testing.T) {
 	select {
 	case err := <-done:
 		if !errors.Is(err, ErrCancelled) {
-			t.Errorf("err = %v, esperaba ErrCancelled", err)
+			t.Errorf("err = %v, expected ErrCancelled", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("Prompt no atendió la cancelación: seguiría colgado")
+		t.Fatal("Prompt did not honour the cancellation: it would still be hanging")
 	}
 }
 
@@ -58,15 +57,15 @@ func TestPromptTrimsWhitespace(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got != "ada@example.com" {
-		t.Errorf("= %q, esperaba sin espacios sobrantes", got)
+		t.Errorf("= %q, expected no leftover whitespace", got)
 	}
 }
 
 func TestPromptTreatsEOFAsCancellation(t *testing.T) {
-	// Ctrl+D en una pregunta es abandonar, no un error que reportar.
+	// Ctrl+D at a question means giving up, not an error to report.
 	_, err := Prompt(context.Background(), strings.NewReader(""), "Email: ")
 	if !errors.Is(err, ErrCancelled) {
-		t.Errorf("err = %v, esperaba ErrCancelled", err)
+		t.Errorf("err = %v, expected ErrCancelled", err)
 	}
 }
 
@@ -77,24 +76,22 @@ func TestConfirmDefaults(t *testing.T) {
 		defaultYes bool
 		want       bool
 	}{
-		{"enter con defecto sí", "\n", true, true},
-		{"enter con defecto no", "\n", false, false},
-		{"s", "s\n", false, true},
-		{"si", "si\n", false, true},
-		{"sí con acento", "sí\n", false, true},
+		{"enter with default yes", "\n", true, true},
+		{"enter with default no", "\n", false, false},
 		{"y", "y\n", false, true},
-		{"mayúscula", "S\n", false, true},
+		{"yes", "yes\n", false, true},
+		{"uppercase", "Y\n", false, true},
 		{"n", "n\n", true, false},
-		{"cualquier otra cosa es no", "quizás\n", true, false},
+		{"anything else is no", "maybe\n", true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Confirm(context.Background(), strings.NewReader(tt.input), "¿sí? ", tt.defaultYes)
+			got, err := Confirm(context.Background(), strings.NewReader(tt.input), "yes? ", tt.defaultYes)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got != tt.want {
-				t.Errorf("= %v, esperaba %v", got, tt.want)
+				t.Errorf("= %v, expected %v", got, tt.want)
 			}
 		})
 	}
@@ -104,21 +101,21 @@ func TestConfirmPropagatesCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := Confirm(ctx, bloqueante{}, "¿sí? ", false)
+	_, err := Confirm(ctx, blocking{}, "yes? ", false)
 	if !errors.Is(err, ErrCancelled) {
-		t.Errorf("err = %v, esperaba ErrCancelled", err)
+		t.Errorf("err = %v, expected ErrCancelled", err)
 	}
 }
 
 func TestSelectNumberedRespondsToCancellation(t *testing.T) {
-	// La variante sin terminal también lee stdin de forma bloqueante.
+	// The variant without a terminal also reads stdin in a blocking way.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := selectNumbered(ctx, "¿cuál?", []Option{{Label: "a"}, {Label: "b"}}, 0)
+	_, err := selectNumbered(ctx, "which one?", []Option{{Label: "a"}, {Label: "b"}}, 0)
 	if !errors.Is(err, ErrCancelled) {
-		t.Errorf("err = %v, esperaba ErrCancelled", err)
+		t.Errorf("err = %v, expected ErrCancelled", err)
 	}
 }
 
-var _ io.Reader = bloqueante{}
+var _ io.Reader = blocking{}

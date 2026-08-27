@@ -1,11 +1,12 @@
-// Package awscreds conecta las credenciales del laboratorio con el AWS CLI.
+// Package awscreds connects the lab credentials to the AWS CLI.
 //
-// Hay dos caminos, y la herramienta soporta los dos:
+// There are two paths, and the tool supports both:
 //
-//   - credential_process: el CLI invoca a este binario cuando necesita
-//     credenciales, las cachea y las renueva solo. Nada expirado queda en disco.
-//   - Escribir ~/.aws/credentials: el modo clásico, para herramientas que leen
-//     el fichero INI directamente en vez de usar la cadena del SDK.
+//   - credential_process: the CLI invokes this binary when it needs
+//     credentials, caches them and renews them on its own. Nothing expired is
+//     left on disk.
+//   - Writing ~/.aws/credentials: the classic mode, for tools that read the INI
+//     file directly instead of using the SDK chain.
 package awscreds
 
 import (
@@ -20,7 +21,7 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-// CredentialsPath devuelve la ruta de ~/.aws/credentials, respetando
+// CredentialsPath returns the path of ~/.aws/credentials, honouring
 // AWS_SHARED_CREDENTIALS_FILE.
 func CredentialsPath() string {
 	if p := os.Getenv("AWS_SHARED_CREDENTIALS_FILE"); p != "" {
@@ -33,7 +34,7 @@ func CredentialsPath() string {
 	return filepath.Join(home, ".aws", "credentials")
 }
 
-// ConfigPath devuelve la ruta de ~/.aws/config, respetando AWS_CONFIG_FILE.
+// ConfigPath returns the path of ~/.aws/config, honouring AWS_CONFIG_FILE.
 func ConfigPath() string {
 	if p := os.Getenv("AWS_CONFIG_FILE"); p != "" {
 		return p
@@ -45,7 +46,7 @@ func ConfigPath() string {
 	return filepath.Join(home, ".aws", "config")
 }
 
-// loadINI abre un fichero de AWS, tratando la ausencia como fichero vacío.
+// loadINI opens an AWS file, treating its absence as an empty file.
 func loadINI(path string) (*ini.File, error) {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -55,7 +56,7 @@ func loadINI(path string) (*ini.File, error) {
 	}
 	f, err := ini.Load(raw)
 	if err != nil {
-		return nil, fmt.Errorf("%s no se pudo parsear: %w", path, err)
+		return nil, fmt.Errorf("%s could not be parsed: %w", path, err)
 	}
 	return f, nil
 }
@@ -68,10 +69,10 @@ func saveINI(f *ini.File, path string, perm os.FileMode) error {
 	return atomicfile.Write(path, []byte(sb.String()), perm)
 }
 
-// WriteSharedCredentials escribe el perfil en ~/.aws/credentials.
+// WriteSharedCredentials writes the profile into ~/.aws/credentials.
 //
-// Se reescribe el fichero entero, así que se carga primero y solo se toca la
-// sección del perfil: los demás perfiles del usuario tienen que sobrevivir intactos.
+// The whole file is rewritten, so it is loaded first and only the profile's
+// section is touched: the user's other profiles have to survive intact.
 func WriteSharedCredentials(profile string, creds *state.Credentials) error {
 	path := CredentialsPath()
 	f, err := loadINI(path)
@@ -79,7 +80,7 @@ func WriteSharedCredentials(profile string, creds *state.Credentials) error {
 		return err
 	}
 
-	sec, err := f.NewSection(profile) // devuelve la existente si ya está
+	sec, err := f.NewSection(profile) // returns the existing one if present
 	if err != nil {
 		return err
 	}
@@ -90,12 +91,12 @@ func WriteSharedCredentials(profile string, creds *state.Credentials) error {
 	return saveINI(f, path, 0o600)
 }
 
-// RemoveSharedCredentials borra el perfil de ~/.aws/credentials.
+// RemoveSharedCredentials deletes the profile from ~/.aws/credentials.
 //
-// Hace falta al activar credential_process: dentro de un mismo perfil, las
-// claves estáticas del fichero de credenciales ganan sobre el
-// credential_process declarado en config, así que dejarlas convierte al
-// proveedor en decorado y el usuario seguiría usando credenciales muertas.
+// It is needed when enabling credential_process: within a single profile, the
+// static keys in the credentials file win over the credential_process declared
+// in config, so leaving them turns the provider into decoration and the user
+// would keep using dead credentials.
 func RemoveSharedCredentials(profile string) error {
 	path := CredentialsPath()
 	f, err := loadINI(path)
@@ -109,7 +110,7 @@ func RemoveSharedCredentials(profile string) error {
 	return saveINI(f, path, 0o600)
 }
 
-// HasStaticCredentials indica si el perfil tiene claves estáticas escritas.
+// HasStaticCredentials reports whether the profile has static keys written.
 func HasStaticCredentials(profile string) bool {
 	f, err := loadINI(CredentialsPath())
 	if err != nil {
@@ -118,8 +119,8 @@ func HasStaticCredentials(profile string) bool {
 	return f.Section(profile).Key("aws_access_key_id").String() != ""
 }
 
-// configSectionName traduce un perfil al nombre de sección de ~/.aws/config,
-// donde todo lo que no sea "default" lleva el prefijo "profile ".
+// configSectionName translates a profile into the ~/.aws/config section name,
+// where everything other than "default" carries the "profile " prefix.
 func configSectionName(profile string) string {
 	if profile == "default" {
 		return "default"
@@ -127,8 +128,8 @@ func configSectionName(profile string) string {
 	return "profile " + profile
 }
 
-// ConfigureCredentialProcess declara este binario como proveedor del perfil,
-// preservando region y demás ajustes que el usuario ya tuviera.
+// ConfigureCredentialProcess declares this binary as the profile's provider,
+// preserving the region and any other settings the user already had.
 func ConfigureCredentialProcess(profile, command, region string) error {
 	path := ConfigPath()
 	f, err := loadINI(path)
@@ -146,7 +147,7 @@ func ConfigureCredentialProcess(profile, command, region string) error {
 	return saveINI(f, path, 0o644)
 }
 
-// CredentialProcessCommand devuelve el credential_process configurado, si lo hay.
+// CredentialProcessCommand returns the configured credential_process, if any.
 func CredentialProcessCommand(profile string) string {
 	f, err := loadINI(ConfigPath())
 	if err != nil {
@@ -155,7 +156,7 @@ func CredentialProcessCommand(profile string) string {
 	return f.Section(configSectionName(profile)).Key("credential_process").String()
 }
 
-// ProfileRegion devuelve la region configurada para el perfil.
+// ProfileRegion returns the region configured for the profile.
 func ProfileRegion(profile string) string {
 	f, err := loadINI(ConfigPath())
 	if err != nil {
@@ -164,21 +165,21 @@ func ProfileRegion(profile string) string {
 	return f.Section(configSectionName(profile)).Key("region").String()
 }
 
-// El perfil "default" es el que usan el AWS CLI y todos los SDKs cuando no se
-// indica ninguno. Apuntarlo a este proveedor es la forma portable de no tener
-// que escribir --profile: vive en un fichero de configuración, así que no
-// depende del shell, de la distribución ni de ninguna variable de entorno.
+// The "default" profile is the one the AWS CLI and every SDK use when none is
+// given. Pointing it at this provider is the portable way to avoid having to
+// type --profile: it lives in a configuration file, so it does not depend on
+// the shell, the distribution or any environment variable.
 const DefaultProfileName = "default"
 
-// DefaultProfileConflict describe qué hay ya configurado como perfil por
-// defecto, o cadena vacía si está libre.
+// DefaultProfileConflict describes what is already configured as the default
+// profile, or an empty string if it is free.
 //
-// Pisar el perfil por defecto de alguien le rompería en silencio el resto de
-// sus comandos de AWS, así que hay que mirar antes de escribir.
+// Clobbering someone's default profile would silently break the rest of their
+// AWS commands, so we have to look before writing.
 func DefaultProfileConflict(ourCommand string) string {
 	if creds, err := loadINI(CredentialsPath()); err == nil {
 		if creds.Section(DefaultProfileName).Key("aws_access_key_id").String() != "" {
-			return fmt.Sprintf("hay claves estáticas en %s", CredentialsPath())
+			return fmt.Sprintf("there are static keys in %s", CredentialsPath())
 		}
 	}
 
@@ -190,29 +191,29 @@ func DefaultProfileConflict(ourCommand string) string {
 
 	if cmd := sec.Key("credential_process").String(); cmd != "" {
 		if cmd == ourCommand {
-			return "" // ya somos nosotros: reescribirlo no rompe nada
+			return "" // it is already us: rewriting it breaks nothing
 		}
-		return fmt.Sprintf("ya hay un credential_process: %s", cmd)
+		return fmt.Sprintf("there is already a credential_process: %s", cmd)
 	}
-	// Otras formas habituales de definir el perfil por defecto.
+	// Other common ways of defining the default profile.
 	for _, key := range []string{"sso_session", "sso_start_url", "role_arn", "source_profile", "credential_source"} {
 		if v := sec.Key(key).String(); v != "" {
-			return fmt.Sprintf("ya está configurado con %s = %s", key, v)
+			return fmt.Sprintf("it is already configured with %s = %s", key, v)
 		}
 	}
 	return ""
 }
 
-// ConfigureDefaultProfile apunta el perfil por defecto a este proveedor.
+// ConfigureDefaultProfile points the default profile at this provider.
 func ConfigureDefaultProfile(command, region string) error {
 	return ConfigureCredentialProcess(DefaultProfileName, command, region)
 }
 
-// RemoveDefaultProfile deshace lo anterior.
+// RemoveDefaultProfile undoes the above.
 //
-// Solo se retira lo que pusimos nosotros: si el credential_process es otro, no
-// es nuestro y no se toca. La sección se borra únicamente si queda vacía, para
-// no llevarse por delante una region que la persona hubiera puesto a mano.
+// Only what we put there is withdrawn: if the credential_process is a different
+// one, it is not ours and it is not touched. The section is deleted only if it
+// ends up empty, so as not to take down a region the person set by hand.
 func RemoveDefaultProfile(ourCommand string) (bool, error) {
 	cfg, err := loadINI(ConfigPath())
 	if err != nil {
@@ -230,7 +231,7 @@ func RemoveDefaultProfile(ourCommand string) (bool, error) {
 	return true, saveINI(cfg, ConfigPath(), 0o644)
 }
 
-// IsDefaultProfileOurs indica si el perfil por defecto ya apunta a nosotros.
+// IsDefaultProfileOurs reports whether the default profile already points at us.
 func IsDefaultProfileOurs(ourCommand string) bool {
 	cfg, err := loadINI(ConfigPath())
 	if err != nil {

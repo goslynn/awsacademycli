@@ -2,6 +2,6 @@
 /vockit
 /dist/
 
-# Las capturas de vockit llevan cookies de sesión y credenciales en claro.
-captura*.json
+# vockit captures carry session cookies and credentials in the clear.
+capture*.json
 *.har

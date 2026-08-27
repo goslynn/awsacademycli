@@ -15,23 +15,23 @@ import (
 )
 
 func TestParseStatus(t *testing.T) {
-	// Vocareum contesta en texto plano, no en JSON.
+	// Vocareum answers in plain text, not in JSON.
 	tests := []struct {
 		name  string
 		body  string
 		want  LabState
 		clock time.Duration
 	}{
-		{"listo", "Lab status: ready<br>", StateRunning, 0},
-		{"arrancando", "Lab status: starting<br>", StateStarting, 0},
-		{"detenido", "Lab status: stopped<br>", StateStopped, 0},
-		{"no iniciado", "Lab status: not started<br>", StateStopped, 0},
-		{"deteniéndose", "Lab status: terminating<br>", StateStopping, 0},
-		{"ilegible", "<html><body>algo salió mal</body></html>", StateUnknown, 0},
+		{"ready", "Lab status: ready<br>", StateRunning, 0},
+		{"starting", "Lab status: starting<br>", StateStarting, 0},
+		{"stopped", "Lab status: stopped<br>", StateStopped, 0},
+		{"not started", "Lab status: not started<br>", StateStopped, 0},
+		{"stopping", "Lab status: terminating<br>", StateStopping, 0},
+		{"unreadable", "<html><body>something went wrong</body></html>", StateUnknown, 0},
 		{
-			// Solo cuenta el contador etiquetado: en la página del laboratorio
-			// conviven varios relojes y los demás miden otra cosa.
-			name:  "contador etiquetado, no el acumulado",
+			// Only the labelled countdown counts: several clocks coexist on the
+			// lab page and the others measure something else.
+			name:  "labelled countdown, not the accumulated one",
 			body:  "Remaining session time: 03:53:27(234 minutes)<br>Accumulated lab time: 04:42:00 (282 minutes)",
 			want:  StateRunning,
 			clock: 3*time.Hour + 53*time.Minute + 27*time.Second,
@@ -41,22 +41,22 @@ func TestParseStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseStatus(tt.body)
 			if got.State != tt.want {
-				t.Errorf("State = %q, esperaba %q", got.State, tt.want)
+				t.Errorf("State = %q, expected %q", got.State, tt.want)
 			}
 			if got.Remaining != tt.clock {
-				t.Errorf("Remaining = %v, esperaba %v", got.Remaining, tt.clock)
+				t.Errorf("Remaining = %v, expected %v", got.Remaining, tt.clock)
 			}
 		})
 	}
 }
 
 func TestParseStatusIgnoresSubstrings(t *testing.T) {
-	// Una página de cientos de kilobytes contiene "red" dentro de "required" y
-	// "ready" dentro de "already". Buscar palabras sueltas por el cuerpo daba
-	// falsos positivos; solo vale la etiqueta.
-	body := `<input required class="hidden"> ya está already configurado, green button`
+	// A page of hundreds of kilobytes contains "red" inside "required" and
+	// "ready" inside "already". Searching for loose words across the body gave
+	// false positives; only the label counts.
+	body := `<input required class="hidden"> it is already configured, green button`
 	if got := parseStatus(body); got.State != StateUnknown {
-		t.Errorf("State = %q, esperaba desconocido", got.State)
+		t.Errorf("State = %q, expected unknown", got.State)
 	}
 }
 
@@ -64,14 +64,14 @@ func TestParseExpiry(t *testing.T) {
 	body := `<span id="vlab-expiretime" class="hidden-1">1787803239</span>&nbsp;Remaining session time: 03:53:27`
 	exp, ok := ParseExpiry(body)
 	if !ok {
-		t.Fatal("esperaba encontrar la marca de expiración")
+		t.Fatal("expected to find the expiry timestamp")
 	}
 	if exp.Unix() != 1787803239 {
 		t.Errorf("Expiry = %v (%d)", exp, exp.Unix())
 	}
 }
 
-// fakeLab simula un laboratorio que tarda unas cuantas consultas en arrancar.
+// fakeLab simulates a lab that takes a few polls to start.
 type fakeLab struct {
 	polls   int
 	readyAt int
@@ -114,7 +114,7 @@ Accumulated lab time: 04:42:00 (282 minutes)<br>`))
 	return mux
 }
 
-// expiresAt es la marca Unix que devolvería un laboratorio recién arrancado.
+// expiresAt is the Unix timestamp a freshly started lab would return.
 func expiresAt() string {
 	return strconv.FormatInt(time.Now().Add(3*time.Hour+59*time.Minute).Unix(), 10)
 }
@@ -135,7 +135,7 @@ func newTestLab(t *testing.T, f *fakeLab) *Lab {
 		Status:      srv.URL + "/util/vcput.php_status",
 		Credentials: srv.URL + "/util/vcput.php_creds",
 	})
-	lab.PollInterval = 5 * time.Millisecond // no hace falta esperar de verdad en un test
+	lab.PollInterval = 5 * time.Millisecond // no need to wait for real in a test
 	return lab
 }
 
@@ -149,14 +149,14 @@ func TestStartAndWait(t *testing.T) {
 		t.Fatal(err)
 	}
 	if st.State != StateStopped {
-		t.Fatalf("estado inicial = %q, esperaba detenido", st.State)
+		t.Fatalf("initial state = %q, expected stopped", st.State)
 	}
 
 	if err := lab.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if !fake.started {
-		t.Fatal("Start no llegó al endpoint")
+		t.Fatal("Start never reached the endpoint")
 	}
 
 	var ticks int
@@ -165,15 +165,15 @@ func TestStartAndWait(t *testing.T) {
 		t.Fatalf("WaitForRunning: %v", err)
 	}
 	if !final.Running() {
-		t.Errorf("estado final = %q", final.State)
+		t.Errorf("final state = %q", final.State)
 	}
 	if ticks < 2 {
-		t.Errorf("esperaba varios avisos de progreso, hubo %d", ticks)
+		t.Errorf("expected several progress notices, there were %d", ticks)
 	}
 }
 
 func TestWaitForRunningTimeout(t *testing.T) {
-	// Un laboratorio que nunca arranca tiene que rendirse, no colgarse.
+	// A lab that never starts has to give up, not hang.
 	fake := &fakeLab{readyAt: 1 << 30}
 	lab := newTestLab(t, fake)
 
@@ -182,11 +182,11 @@ func TestWaitForRunningTimeout(t *testing.T) {
 	}
 	_, err := lab.WaitForRunning(context.Background(), 200*time.Millisecond, nil)
 	if err == nil {
-		t.Fatal("esperaba un timeout")
+		t.Fatal("expected a timeout")
 	}
-	// El mensaje debe decir cuál fue el último estado visto, para poder diagnosticar.
-	if got := err.Error(); !strings.Contains(got, "arrancando") {
-		t.Errorf("el error debería incluir el último estado: %q", got)
+	// The message must say what the last state seen was, so it can be diagnosed.
+	if got := err.Error(); !strings.Contains(got, "starting") {
+		t.Errorf("the error should include the last state: %q", got)
 	}
 }
 
@@ -205,18 +205,18 @@ func TestCredentials(t *testing.T) {
 	if creds.AccessKeyID != "ASIAQZXK4NEXAMPLE01" {
 		t.Errorf("AccessKeyID = %q", creds.AccessKeyID)
 	}
-	// Sin expiración, el AWS CLI cachearía las credenciales para siempre.
+	// Without an expiry, the AWS CLI would cache the credentials forever.
 	if creds.Expiration.IsZero() {
-		t.Error("esperaba la expiración que publica Vocareum")
+		t.Error("expected the expiry Vocareum publishes")
 	}
 	if d := time.Until(creds.Expiration); d < 3*time.Hour || d > 4*time.Hour {
-		t.Errorf("expiración a %v vista, esperaba ~3h59m", d)
+		t.Errorf("expiry seen at %v, expected ~3h59m", d)
 	}
 }
 
 func TestDetectEndpoints(t *testing.T) {
-	// Un extracto de la página real del laboratorio. Vocareum sirve varios
-	// proveedores desde la misma página, así que hay que quedarse con AWS.
+	// An extract of the real lab page. Vocareum serves several providers from
+	// the same page, so we have to keep the AWS ones.
 	u, _ := url.Parse("https://labs.vocareum.com/main/main.php?m=clabide&stepid=5679250")
 	page := &httpx.Response{URL: u, Body: []byte(`
 		<script>
@@ -230,8 +230,8 @@ func TestDetectEndpoints(t *testing.T) {
 
 	ep := DetectEndpoints(page)
 
-	// Deben quedar absolutas y conservar los parámetros de sesión: sin el
-	// stepid, Vocareum no sabe de qué laboratorio le hablamos.
+	// They must come out absolute and keep the session parameters: without the
+	// stepid, Vocareum does not know which lab we are talking about.
 	want := map[string]string{
 		"start":  "https://labs.vocareum.com/util/vcput.php?a=startaws&stepid=5679250&version=0&mode=s&type=1",
 		"stop":   "https://labs.vocareum.com/util/vcput.php?a=endaws&stepid=5679250&version=0&mode=s&type=1",
@@ -241,35 +241,35 @@ func TestDetectEndpoints(t *testing.T) {
 	got := map[string]string{"start": ep.Start, "stop": ep.Stop, "status": ep.Status, "creds": ep.Credentials}
 	for k, w := range want {
 		if got[k] != w {
-			t.Errorf("%s =\n  %q\nesperaba\n  %q", k, got[k], w)
+			t.Errorf("%s =\n  %q\nexpected\n  %q", k, got[k], w)
 		}
 	}
 	if !ep.Complete() {
-		t.Errorf("faltan endpoints: %v", ep.Missing())
+		t.Errorf("missing endpoints: %v", ep.Missing())
 	}
 }
 
 func TestDetectEndpointsIgnoresOtherClouds(t *testing.T) {
-	// Si el laboratorio solo ofreciera Azure, no debemos confundirlo con AWS.
+	// If the lab only offered Azure, we must not mistake it for AWS.
 	u, _ := url.Parse("https://labs.vocareum.com/main/main.php")
 	page := &httpx.Response{URL: u, Body: []byte(`
 		<script>vcAjax("../util/vcput.php?a=startazure&stepid=1");</script>`)}
 
 	ep := DetectEndpoints(page)
 	if ep.Start != "" {
-		t.Errorf("Start = %q, no debería reconocer un endpoint de Azure", ep.Start)
+		t.Errorf("Start = %q, it should not recognise an Azure endpoint", ep.Start)
 	}
 	if ep.Complete() {
-		t.Error("Complete() debería ser falso")
+		t.Error("Complete() should be false")
 	}
 	if len(ep.Missing()) != 4 {
-		t.Errorf("Missing() = %v, esperaba los cuatro", ep.Missing())
+		t.Errorf("Missing() = %v, expected all four", ep.Missing())
 	}
 }
 
 func TestLabWithoutEndpointsFailsClearly(t *testing.T) {
-	// Sin endpoints hay que decirlo, no pegarle a una URL inventada y
-	// reportar un 404 incomprensible.
+	// With no endpoints we have to say so, not hit a made-up URL and report an
+	// incomprehensible 404.
 	hc, err := httpx.New()
 	if err != nil {
 		t.Fatal(err)
@@ -279,22 +279,22 @@ func TestLabWithoutEndpointsFailsClearly(t *testing.T) {
 
 	_, err = lab.Status(context.Background())
 	if !errors.Is(err, ErrEndpointsUnknown) {
-		t.Fatalf("esperaba ErrEndpointsUnknown, obtuve %v", err)
+		t.Fatalf("expected ErrEndpointsUnknown, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "debug lab") {
-		t.Errorf("el error debería sugerir cómo diagnosticarlo: %q", err)
+		t.Errorf("the error should suggest how to diagnose it: %q", err)
 	}
 }
 
 func TestEndpointsMergePrefersDiscovered(t *testing.T) {
-	// Lo recién detectado en la página le gana a lo que hubiera cacheado.
+	// What was just detected on the page beats whatever was cached.
 	cached := Endpoints{Start: "https://old/a?a=startaws", Stop: "https://old/a?a=endaws"}
 	merged := cached.Merge(Endpoints{Start: "https://new/a?a=startaws"})
 
 	if merged.Start != "https://new/a?a=startaws" {
-		t.Errorf("Start = %q, esperaba el detectado", merged.Start)
+		t.Errorf("Start = %q, expected the detected one", merged.Start)
 	}
 	if merged.Stop != "https://old/a?a=endaws" {
-		t.Errorf("Stop = %q, esperaba conservar el cacheado", merged.Stop)
+		t.Errorf("Stop = %q, expected the cached one to be kept", merged.Stop)
 	}
 }

@@ -29,40 +29,40 @@ func newSetupCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "setup",
-		Short: "Configura la herramienta por primera vez",
-		Long: `Guarda tus credenciales de AWS Academy y localiza tu laboratorio.
+		Short: "Configure the tool for the first time",
+		Long: `Saves your AWS Academy credentials and locates your lab.
 
-Pide el usuario y la contraseña, comprueba que funcionan haciendo login de
-verdad, busca en tu cuenta el curso y el ítem del Learner Lab, y deja todo
-guardado en ` + config.Path() + ` con permisos 0600.
+It asks for the username and the password, checks that they work by logging in
+for real, looks up the Learner Lab course and item in your account, and leaves
+everything saved in ` + config.Path() + ` with permissions 0600.
 
-También ofrece dos comodidades, ambas opcionales:
+It also offers two conveniences, both optional:
 
-  - configurar credential_process en ~/.aws/config, que es la forma recomendada:
-    el AWS CLI le pide las credenciales a esta herramienta cuando las necesita,
-    así que nunca te quedan credenciales vencidas escritas en disco;
-  - apuntar el perfil de AWS por defecto a tu laboratorio, para no escribir
-    --profile en cada comando.`,
+  - configuring credential_process in ~/.aws/config, which is the recommended
+    way: the AWS CLI asks this tool for credentials when it needs them, so you
+    never end up with expired credentials written to disk;
+  - pointing the default AWS profile at your lab, so you do not have to type
+    --profile on every command.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 
 			if email == "" {
 				var err error
-				if email, err = ui.Prompt(ctx, os.Stdin, "Email de AWS Academy: "); err != nil {
+				if email, err = ui.Prompt(ctx, os.Stdin, "AWS Academy email: "); err != nil {
 					return err
 				}
 			}
 			if email == "" {
-				return errors.New("hace falta un email")
+				return errors.New("an email is required")
 			}
 
-			password, err := ui.PromptPassword(ctx, "Contraseña (no se muestra): ")
+			password, err := ui.PromptPassword(ctx, "Password (not shown): ")
 			if err != nil {
 				return err
 			}
 			if password == "" {
-				return errors.New("hace falta una contraseña")
+				return errors.New("a password is required")
 			}
 
 			cfg := &config.Config{
@@ -73,9 +73,9 @@ También ofrece dos comodidades, ambas opcionales:
 				CourseID:   courseID,
 			}
 
-			// Validamos antes de guardar nada: no tiene sentido dejar en disco
-			// una contraseña que ya sabemos que no sirve.
-			fmt.Fprintln(os.Stderr, "\nProbando el login…")
+			// We validate before saving anything: there is no point leaving a
+			// password on disk that we already know does not work.
+			fmt.Fprintln(os.Stderr, "\nTesting the login…")
 			client, err := httpx.New()
 			if err != nil {
 				return err
@@ -85,7 +85,7 @@ También ofrece dos comodidades, ambas opcionales:
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "%s login correcto como %s\n", mark(true), user.Name)
+			fmt.Fprintf(os.Stderr, "%s logged in successfully as %s\n", mark(true), user.Name)
 
 			if err := cfg.Save(); err != nil {
 				return err
@@ -95,16 +95,16 @@ También ofrece dos comodidades, ambas opcionales:
 				return err
 			}
 
-			// Buscamos el laboratorio ahora para que el primer 'start' no se
-			// tope con sorpresas, y para poder nombrar el curso encontrado.
-			fmt.Fprintln(os.Stderr, "\nBuscando tu laboratorio…")
+			// We look up the lab now so that the first 'start' does not run
+			// into surprises, and so we can name the course we found.
+			fmt.Fprintln(os.Stderr, "\nLooking for your lab…")
 			app, err := newApp(flagDebugHTTP)
 			if err != nil {
 				return err
 			}
-			// Si hay varios cursos preguntamos ahora, mientras estamos en una
-			// sesión interactiva. Descubrirlo al primer 'start' obligaría al
-			// usuario a resolverlo justo cuando quería trabajar.
+			// If there are several courses we ask now, while we are in an
+			// interactive session. Discovering it at the first 'start' would
+			// force the user to sort it out right when they wanted to work.
 			if cfg.CourseID == "" {
 				if courses, cErr := app.canvas.Courses(ctx); cErr == nil && len(courses) > 1 {
 					chosen, cErr := chooseCourse(ctx, courses)
@@ -121,11 +121,11 @@ También ofrece dos comodidades, ambas opcionales:
 
 			disc, err := app.Discover(ctx)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s no pude localizarlo automáticamente: %v\n", mark(false), err)
-				fmt.Fprintln(os.Stderr, "  La configuración quedó guardada igual; probá 'awsacademy courses'.")
+				fmt.Fprintf(os.Stderr, "%s could not locate it automatically: %v\n", mark(false), err)
+				fmt.Fprintln(os.Stderr, "  The configuration was saved anyway; try 'awsacademy courses'.")
 			} else {
 				fmt.Fprintf(os.Stderr, "%s %s\n", mark(true), disc.CourseName)
-				fmt.Fprintf(os.Stderr, "  ítem: %s\n", disc.ItemTitle)
+				fmt.Fprintf(os.Stderr, "  item: %s\n", disc.ItemTitle)
 			}
 
 			if !skipProcess {
@@ -139,65 +139,65 @@ También ofrece dos comodidades, ambas opcionales:
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "\nListo. Configuración en %s\n", config.Path())
-			fmt.Fprintln(os.Stderr, "Probá:  awsacademy start")
+			fmt.Fprintf(os.Stderr, "\nDone. Configuration in %s\n", config.Path())
+			fmt.Fprintln(os.Stderr, "Try:  awsacademy start")
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&courseID, "course-id", "", "fijar este curso y no preguntar")
-	cmd.Flags().StringVar(&email, "email", "", "email de AWS Academy (si no, se pregunta)")
-	cmd.Flags().StringVar(&profile, "profile", config.DefaultAWSProfile, "perfil de AWS CLI a mantener")
-	cmd.Flags().StringVar(&region, "region", "us-east-1", "region de AWS por defecto")
+	cmd.Flags().StringVar(&courseID, "course-id", "", "pin this course and do not ask")
+	cmd.Flags().StringVar(&email, "email", "", "AWS Academy email (asked for if omitted)")
+	cmd.Flags().StringVar(&profile, "profile", config.DefaultAWSProfile, "AWS CLI profile to maintain")
+	cmd.Flags().StringVar(&region, "region", "us-east-1", "default AWS region")
 	cmd.Flags().BoolVar(&useProcess, "credential-process", false,
-		"configurar credential_process sin preguntar")
+		"configure credential_process without asking")
 	cmd.Flags().BoolVar(&skipProcess, "no-credential-process", false,
-		"no tocar ~/.aws/config")
+		"do not touch ~/.aws/config")
 	cmd.Flags().BoolVar(&useDefault, "default-profile", false,
-		"usar el laboratorio como perfil de AWS por defecto, sin preguntar")
+		"use the lab as the default AWS profile, without asking")
 	cmd.Flags().BoolVar(&skipDefault, "no-default-profile", false,
-		"no tocar el perfil por defecto de AWS")
+		"do not touch the default AWS profile")
 	return cmd
 }
 
-// setupCredentialProcess declara este binario como proveedor del perfil.
+// setupCredentialProcess declares this binary as the profile's provider.
 func setupCredentialProcess(ctx context.Context, profile, region string, assumeYes bool) error {
 	if !assumeYes {
 		fmt.Fprintf(os.Stderr, `
-Puedo configurar el perfil %q para que el AWS CLI me pida las credenciales
-cuando las necesite (credential_process). Así se renuevan solas y no quedan
-credenciales vencidas en ~/.aws/credentials.
+I can configure the %q profile so that the AWS CLI asks me for credentials
+when it needs them (credential_process). That way they renew themselves and no
+expired credentials are left in ~/.aws/credentials.
 
 `, profile)
-		ok, err := ui.Confirm(ctx, os.Stdin, "¿Configurarlo? [S/n]: ", true)
+		ok, err := ui.Confirm(ctx, os.Stdin, "Configure it? [Y/n]: ", true)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			fmt.Fprintln(os.Stderr, "De acuerdo: usá 'awsacademy start --write-credentials'.")
+			fmt.Fprintln(os.Stderr, "All right: use 'awsacademy start --write-credentials'.")
 			return nil
 		}
 	}
 
-	// Este es el detalle que rompe la configuración si se pasa por alto: dentro
-	// de un mismo perfil, las claves estáticas de ~/.aws/credentials ganan
-	// sobre el credential_process de ~/.aws/config. Dejarlas convertiría al
-	// proveedor en decorado y el usuario seguiría usando credenciales muertas
-	// sin entender por qué.
+	// This is the detail that breaks the setup when overlooked: within a single
+	// profile, the static keys in ~/.aws/credentials win over the
+	// credential_process in config. Leaving them there would turn the provider
+	// into decoration and the user would keep using dead credentials without
+	// understanding why.
 	if awscreds.HasStaticCredentials(profile) {
 		fmt.Fprintf(os.Stderr, `
-Ojo: el perfil %q ya tiene claves escritas en %s.
-Esas claves tienen prioridad sobre credential_process, así que hay que quitarlas
-para que esto sirva de algo.
+Careful: the %q profile already has keys written in %s.
+Those keys take priority over credential_process, so they have to go for this
+to be of any use.
 
 `, profile, awscreds.CredentialsPath())
-		ok, err := ui.Confirm(ctx, os.Stdin, "¿Las borro? [S/n]: ", true)
+		ok, err := ui.Confirm(ctx, os.Stdin, "Delete them? [Y/n]: ", true)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			fmt.Fprintln(os.Stderr,
-				"No toco nada. Mientras esas claves estén ahí, credential_process no se usará.")
+				"Nothing touched. While those keys are there, credential_process will not be used.")
 			return nil
 		}
 		if err := awscreds.RemoveSharedCredentials(profile); err != nil {
@@ -208,6 +208,6 @@ para que esto sirva de algo.
 	if err := awscreds.ConfigureCredentialProcess(profile, selfCommand(), region); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s %s configurado en %s\n", mark(true), profile, awscreds.ConfigPath())
+	fmt.Fprintf(os.Stderr, "%s %s configured in %s\n", mark(true), profile, awscreds.ConfigPath())
 	return nil
 }

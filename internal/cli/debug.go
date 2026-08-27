@@ -16,14 +16,14 @@ import (
 func newDebugCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "debug",
-		Short:  "Herramientas de diagnóstico",
+		Short:  "Diagnostic tools",
 		Hidden: true,
 	}
 	cmd.AddCommand(newDebugLabCmd())
 	return cmd
 }
 
-// rePath busca rutas de endpoints en HTML y JavaScript.
+// rePath looks for endpoint paths in HTML and JavaScript.
 var rePath = regexp.MustCompile(`["'\x60](/?[A-Za-z0-9_./-]*\.(?:php|json|cgi)(?:\?[^"'\x60]*)?)["'\x60]`)
 
 func newDebugLabCmd() *cobra.Command {
@@ -34,12 +34,12 @@ func newDebugLabCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "lab",
-		Short: "Vuelca la página del laboratorio y busca sus endpoints",
-		Long: `Atraviesa el lanzamiento LTI y examina la página del laboratorio.
+		Short: "Dump the lab page and look for its endpoints",
+		Long: `Goes through the LTI launch and examines the lab page.
 
-Sirve para descubrir los endpoints reales de Vocareum sin necesidad de un
-navegador: son los que llama su propio JavaScript. Con --scripts descarga
-también los ficheros .js que la página referencia, que es donde suelen estar.`,
+It serves to discover Vocareum's real endpoints without needing a browser: they
+are the ones its own JavaScript calls. With --scripts it also downloads the .js
+files the page references, which is where they usually live.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			app, err := newApp(flagDebugHTTP)
@@ -54,9 +54,9 @@ también los ficheros .js que la página referencia, que es donde suelen estar.`
 			}
 			page := lab.Session().Page()
 
-			fmt.Fprintf(os.Stderr, "curso:    %s\n", disc.CourseName)
+			fmt.Fprintf(os.Stderr, "course:   %s\n", disc.CourseName)
 			fmt.Fprintf(os.Stderr, "vocareum: %s\n", page.URL)
-			fmt.Fprintf(os.Stderr, "tamaño:   %d bytes\n\n", len(page.Body))
+			fmt.Fprintf(os.Stderr, "size:     %d bytes\n\n", len(page.Body))
 
 			if dumpHTML {
 				fmt.Println(page.String())
@@ -69,7 +69,7 @@ también los ficheros .js que la página referencia, que es donde suelen estar.`
 
 			found := map[string]string{}
 			for _, m := range rePath.FindAllStringSubmatch(page.String(), -1) {
-				found[m[1]] = "página"
+				found[m[1]] = "page"
 			}
 
 			if scripts {
@@ -87,8 +87,8 @@ también los ficheros .js que la página referencia, que es donde suelen estar.`
 			}
 
 			if len(found) == 0 {
-				fmt.Fprintln(os.Stderr, "No encontré ninguna ruta de endpoint.")
-				fmt.Fprintln(os.Stderr, "Probá con --scripts, o capturá el tráfico con: go run ./cmd/vockit")
+				fmt.Fprintln(os.Stderr, "No endpoint path found.")
+				fmt.Fprintln(os.Stderr, "Try --scripts, or capture the traffic with: go run ./cmd/vockit")
 				return nil
 			}
 
@@ -98,43 +98,43 @@ también los ficheros .js que la página referencia, que es donde suelen estar.`
 			}
 			sort.Strings(paths)
 
-			fmt.Println("RUTAS ENCONTRADAS")
+			fmt.Println("PATHS FOUND")
 			for _, p := range paths {
 				fmt.Printf("  %-55s  (%s)\n", p, found[p])
 			}
 
-			fmt.Println("\nEN USO AHORA")
+			fmt.Println("\nCURRENTLY IN USE")
 			ep := lab.Endpoints()
 			fmt.Printf("  status       %s\n", ep.Status)
 			fmt.Printf("  start        %s\n", ep.Start)
 			fmt.Printf("  stop         %s\n", ep.Stop)
 			fmt.Printf("  credentials  %s\n", ep.Credentials)
 			fmt.Fprintf(os.Stderr,
-				"\nLos valores confirmados van en 'vocareum_endpoints' de %s/discovery.json\n",
+				"\nConfirmed values go in 'vocareum_endpoints' of %s/discovery.json\n",
 				stateDirHint())
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&probe, "probe", false,
-		"consultar los endpoints de solo lectura y mostrar su respuesta cruda")
-	cmd.Flags().BoolVar(&dumpHTML, "html", false, "volcar el HTML crudo por stdout")
-	cmd.Flags().BoolVar(&scripts, "scripts", false, "buscar también dentro de los .js que carga la página")
+		"query the read-only endpoints and show their raw response")
+	cmd.Flags().BoolVar(&dumpHTML, "html", false, "dump the raw HTML on stdout")
+	cmd.Flags().BoolVar(&scripts, "scripts", false, "also search inside the .js files the page loads")
 	return cmd
 }
 
-// probeEndpoints consulta los endpoints que no cambian nada y muestra lo que
-// contestan, que es lo que hace falta para escribir bien el parseo.
+// probeEndpoints queries the endpoints that change nothing and shows what they
+// answer, which is what is needed to get the parsing right.
 func probeEndpoints(ctx context.Context, app *App, lab *vocareum.Lab) error {
 	ep := lab.Endpoints()
-	// Solo lectura: arrancar o detener el laboratorio desde una herramienta de
-	// diagnóstico sería una sorpresa desagradable.
+	// Read-only: starting or stopping the lab from a diagnostic tool would be
+	// an unpleasant surprise.
 	for _, probe := range []struct{ name, url string }{
 		{"status (a=getawsstatus)", ep.Status},
-		{"credenciales (a=getaws)", ep.Credentials},
+		{"credentials (a=getaws)", ep.Credentials},
 	} {
 		fmt.Printf("== %s ==\n%s\n", probe.name, probe.url)
 		if probe.url == "" {
-			fmt.Print("   (no detectado)\n\n")
+			fmt.Print("   (not detected)\n\n")
 			continue
 		}
 		resp, err := app.http.Get(ctx, probe.url)
@@ -144,18 +144,18 @@ func probeEndpoints(ctx context.Context, app *App, lab *vocareum.Lab) error {
 		}
 		body := strings.TrimSpace(resp.String())
 		if len(body) > 6000 {
-			body = body[:6000] + "\n   …[truncado]"
+			body = body[:6000] + "\n   …[truncated]"
 		}
 		fmt.Printf("   HTTP %d  %s\n   %s\n\n",
 			resp.StatusCode, resp.Header.Get("Content-Type"), body)
 	}
-	fmt.Println("Las respuestas de arriba son lo que interpreta parseStatus/ParseCredentials.")
+	fmt.Println("The responses above are what parseStatus/ParseCredentials interpret.")
 	return nil
 }
 
 var reScriptSrc = regexp.MustCompile(`<script[^>]+src=["']([^"']+)["']`)
 
-// scriptSources devuelve los .js que carga la página, en absoluto y del mismo host.
+// scriptSources returns the .js files the page loads, absolute and same-host.
 func scriptSources(html string, base *url.URL) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -165,8 +165,7 @@ func scriptSources(html string, base *url.URL) []string {
 			continue
 		}
 		abs := base.ResolveReference(ref)
-		// Solo el JS propio del servicio; los CDN de terceros no llevan
-		// endpoints del laboratorio.
+		// Only the service's own JS; third-party CDNs carry no lab endpoints.
 		if abs.Host != base.Host || seen[abs.String()] {
 			continue
 		}

@@ -11,34 +11,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// errQuiet marca un fallo cuyo detalle ya se mostró: cambia el código de
-// salida sin imprimir un segundo mensaje.
+// errQuiet marks a failure whose detail has already been shown: it changes the
+// exit code without printing a second message.
 var errQuiet = errors.New("")
 
-// Opciones globales, compartidas por todos los subcomandos.
+// Global options, shared by every subcommand.
 var (
 	flagJSON      bool
 	flagDebugHTTP bool
 )
 
-// ExecuteContext corre la CLI. Devuelve el código de salida del proceso.
+// ExecuteContext runs the CLI. It returns the process exit code.
 func ExecuteContext(ctx context.Context, version string) int {
 	root := newRootCmd(version)
 	if err := root.ExecuteContext(ctx); err != nil {
 		if errors.Is(err, errQuiet) {
 			return 1
 		}
-		// Cancelar no es un fallo: no se imprime un error y se sale con el
-		// código convencional para una interrupción (128 + SIGINT).
+		// Cancelling is not a failure: no error is printed and we exit with
+		// the conventional code for an interrupt (128 + SIGINT).
 		if errors.Is(err, ui.ErrCancelled) || errors.Is(err, context.Canceled) {
-			fmt.Fprintln(os.Stderr, "cancelado")
+			fmt.Fprintln(os.Stderr, "cancelled")
 			return 130
 		}
-		// Cobra ya imprimió los errores de uso; los demás los damos nosotros
-		// con una pista de qué hacer a continuación.
+		// Cobra already printed usage errors; the rest we report ourselves
+		// with a hint about what to do next.
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		if errors.Is(err, config.ErrNotConfigured) {
-			fmt.Fprintln(os.Stderr, "\nEmpezá por acá:\n  awsacademy setup")
+			fmt.Fprintln(os.Stderr, "\nStart here:\n  awsacademy setup")
 		}
 		return 1
 	}
@@ -49,33 +49,33 @@ func newRootCmd(version string) *cobra.Command {
 	root := &cobra.Command{
 		Use:     "awsacademy",
 		Version: version,
-		Short:   "Controla el AWS Academy Learner Lab desde la terminal",
-		Long: `awsacademy levanta y baja el Learner Lab de AWS Academy y mantiene
-tu perfil de AWS CLI con credenciales frescas.
+		Short:   "Control the AWS Academy Learner Lab from the terminal",
+		Long: `awsacademy brings the AWS Academy Learner Lab up and down and keeps
+your AWS CLI profile stocked with fresh credentials.
 
-Hace por vos el recorrido de siempre: entrar a Canvas, abrir el laboratorio,
-pulsar Start Lab, esperar a que esté listo y copiar las credenciales. Las
-credenciales del laboratorio duran unas pocas horas, así que ese recorrido se
-repite varias veces al día; esto lo reduce a un comando.
+It does the usual round trip for you: log in to Canvas, open the lab, press
+Start Lab, wait until it is ready and copy the credentials. Lab credentials
+only last a few hours, so that round trip repeats several times a day; this
+reduces it to a single command.
 
-Para empezar:
+To get started:
 
-  awsacademy setup     una vez, guarda tus credenciales de AWS Academy
-  awsacademy start     levanta el laboratorio y actualiza el perfil de AWS
-  awsacademy status    dice si podés trabajar y cuánto tiempo te queda
-  awsacademy courses   lista tus cursos, por si tenés más de uno
-  awsacademy stop      baja el laboratorio
+  awsacademy setup     once, saves your AWS Academy credentials
+  awsacademy start     brings the lab up and refreshes the AWS profile
+  awsacademy status    tells you whether you can work and how much time is left
+  awsacademy courses   lists your courses, in case you have more than one
+  awsacademy stop      brings the lab down
 
-La configuración vive en:
+The configuration lives in:
   ` + config.Path(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 
 	root.PersistentFlags().BoolVar(&flagJSON, "json", false,
-		"salida en JSON, para consumir desde scripts")
+		"JSON output, for consumption from scripts")
 	root.PersistentFlags().BoolVar(&flagDebugHTTP, "debug-http", false,
-		"traza cada request HTTP por stderr")
+		"trace every HTTP request on stderr")
 
 	root.AddCommand(
 		newSetupCmd(),

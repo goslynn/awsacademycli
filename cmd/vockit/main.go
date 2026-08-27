@@ -1,17 +1,17 @@
-// Command vockit captura el tráfico real de AWS Academy para poder escribir el
-// cliente HTTP contra evidencia en vez de contra suposiciones.
+// Command vockit captures the real AWS Academy traffic so the HTTP client can
+// be written against evidence rather than against assumptions.
 //
-// No forma parte del binario que se instala: es la herramienta que se usa una
-// vez al principio, y de nuevo si Canvas o Vocareum cambian. Por eso vive en su
-// propio comando, y chromedp nunca entra en cmd/awsacademy.
+// It is not part of the binary that gets installed: it is the tool you use once
+// at the beginning, and again if Canvas or Vocareum change. That is why it
+// lives in its own command, and why chromedp never enters cmd/awsacademy.
 //
-// Uso:
+// Usage:
 //
-//	go run ./cmd/vockit -out captura.json
+//	go run ./cmd/vockit -out capture.json
 //
-// Abre un navegador, hacés el flujo a mano (login, abrir el laboratorio,
-// Start Lab, AWS Details) y al cerrar con Ctrl+C queda el volcado de todos los
-// XHR con su URL, método, cabeceras, cuerpo y respuesta.
+// It opens a browser, you do the flow by hand (log in, open the lab, Start Lab,
+// AWS Details) and on closing with Ctrl+C you are left with a dump of every XHR
+// with its URL, method, headers, body and response.
 package main
 
 import (
@@ -34,7 +34,7 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// exchange es un request con su respuesta, tal como los vio el navegador.
+// exchange is a request with its response, as the browser saw them.
 type exchange struct {
 	Time           time.Time         `json:"time"`
 	Method         string            `json:"method"`
@@ -43,7 +43,7 @@ type exchange struct {
 	RequestHeaders map[string]string `json:"request_headers,omitempty"`
 	PostData       string            `json:"post_data,omitempty"`
 	Status         int64             `json:"status,omitempty"`
-	// postDataPending marca los cuerpos que CDP omitió por tamaño.
+	// postDataPending marks the bodies CDP omitted because of their size.
 	postDataPending bool              `json:"-"`
 	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 	ResponseBody    string            `json:"response_body,omitempty"`
@@ -52,14 +52,14 @@ type exchange struct {
 func main() {
 	var (
 		startURL = flag.String("url", "https://awsacademy.instructure.com/login/canvas",
-			"página inicial")
-		out         = flag.String("out", "captura.json", "fichero de salida")
+			"starting page")
+		out         = flag.String("out", "capture.json", "output file")
 		filterHosts = flag.String("hosts", "vocareum.com,instructure.com",
-			"lista separada por comas: solo se capturan estos hosts (vacío = todos)")
-		browser = flag.String("browser", "", "ruta del navegador (autodetectada si se omite)")
+			"comma-separated list: only these hosts are captured (empty = all)")
+		browser = flag.String("browser", "", "browser path (autodetected if omitted)")
 		profile = flag.String("profile", "",
-			"directorio de perfil del navegador; persistir uno evita re-loguearse en cada captura")
-		maxBody = flag.Int("max-body", 256*1024, "bytes máximos de cuerpo a guardar por respuesta")
+			"browser profile directory; keeping one around avoids logging in again on every capture")
+		maxBody = flag.Int("max-body", 256*1024, "maximum body bytes to store per response")
 	)
 	flag.Parse()
 
@@ -76,7 +76,7 @@ func run(startURL, out, filterHosts, browserPath, profileDir string, maxBody int
 			return err
 		}
 	}
-	fmt.Fprintf(os.Stderr, "navegador: %s\n", browserPath)
+	fmt.Fprintf(os.Stderr, "browser: %s\n", browserPath)
 
 	if profileDir == "" {
 		var err error
@@ -92,9 +92,11 @@ func run(startURL, out, filterHosts, browserPath, profileDir string, maxBody int
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(browserPath),
 		chromedp.UserDataDir(profileDir),
-		// Necesitamos ver la ventana: el flujo lo hace la persona, no el código.
+		// We need to see the window: the flow is done by the person, not by
+		// the code.
 		chromedp.Flag("headless", false),
-		// Brave arranca con funciones propias que estorban en automatización.
+		// Brave starts up with its own features that get in the way of
+		// automation.
 		chromedp.Flag("disable-brave-update", true),
 		chromedp.Flag("disable-brave-rewards-extension", true),
 		chromedp.Flag("no-first-run", true),
@@ -113,37 +115,37 @@ func run(startURL, out, filterHosts, browserPath, profileDir string, maxBody int
 		network.Enable(),
 		chromedp.Navigate(startURL),
 	); err != nil {
-		return fmt.Errorf("no se pudo arrancar el navegador: %w", err)
+		return fmt.Errorf("could not start the browser: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, `
-Navegador abierto. Hacé el flujo completo a mano:
+Browser open. Do the complete flow by hand:
 
-  1. Login en Canvas
-  2. Entrar al curso y abrir el ítem del Learner Lab
-  3. Start Lab, esperar a que ponga el semáforo en verde
-  4. Abrir "AWS Details" y revelar el bloque de AWS CLI
+  1. Log in to Canvas
+  2. Enter the course and open the Learner Lab item
+  3. Start Lab, wait for the light to turn green
+  4. Open "AWS Details" and reveal the AWS CLI block
   5. End Lab
 
-Cuando termines, volvé acá y pulsá Ctrl+C para guardar la captura.
+When you are done, come back here and press Ctrl+C to save the capture.
 
 `)
 
-	// Terminamos por Ctrl+C o porque se cerró el navegador; en ambos casos
-	// hay que volcar lo capturado, que es el motivo de todo esto.
+	// We finish either on Ctrl+C or because the browser was closed; in both
+	// cases what was captured has to be dumped, which is the point of all this.
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-sigs:
-		fmt.Fprintln(os.Stderr, "\ninterrumpido, guardando...")
+		fmt.Fprintln(os.Stderr, "\ninterrupted, saving...")
 	case <-taskCtx.Done():
-		fmt.Fprintln(os.Stderr, "\nnavegador cerrado, guardando...")
+		fmt.Fprintln(os.Stderr, "\nbrowser closed, saving...")
 	}
 
 	return rec.dump(out)
 }
 
-// recorder acumula los intercambios que pasan el filtro de hosts.
+// recorder accumulates the exchanges that pass the host filter.
 type recorder struct {
 	mu        sync.Mutex
 	exchanges map[network.RequestID]*exchange
@@ -181,7 +183,7 @@ func (r *recorder) onRequest(e *network.EventRequestWillBeSent) {
 		PostData:       postDataOf(e.Request),
 	}
 	if ex := r.exchanges[e.RequestID]; ex.PostData == "" && e.Request.HasPostData {
-		// CDP omite el cuerpo cuando es grande; se pide aparte más tarde.
+		// CDP omits the body when it is large; it is requested separately later.
 		ex.postDataPending = true
 	}
 	r.order = append(r.order, e.RequestID)
@@ -200,8 +202,8 @@ func (r *recorder) onResponse(ctx context.Context, e *network.EventResponseRecei
 	ex.ResponseHeaders = headersOf(e.Response.Headers)
 	pending := ex.postDataPending
 
-	// El cuerpo se pide aparte y solo está disponible un rato, así que se
-	// recoge en cuanto llega el evento y en su propio contexto.
+	// The body is requested separately and is only available for a while, so it
+	// is collected as soon as the event arrives and in its own context.
 	go func() {
 		bodyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
@@ -222,7 +224,7 @@ func (r *recorder) onResponse(ctx context.Context, e *network.EventResponseRecei
 			return
 		}
 		if len(body) > r.maxBody {
-			body = append(body[:r.maxBody], []byte("\n...[truncado]")...)
+			body = append(body[:r.maxBody], []byte("\n...[truncated]")...)
 		}
 		r.mu.Lock()
 		ex.ResponseBody = string(body)
@@ -230,7 +232,7 @@ func (r *recorder) onResponse(ctx context.Context, e *network.EventResponseRecei
 	}()
 }
 
-// wanted decide si la URL entra en la captura.
+// wanted decides whether the URL makes it into the capture.
 func (r *recorder) wanted(rawurl string) bool {
 	if len(r.hosts) == 0 {
 		return true
@@ -244,7 +246,7 @@ func (r *recorder) wanted(rawurl string) bool {
 }
 
 func (r *recorder) dump(out string) error {
-	// Damos un respiro a las descargas de cuerpo en vuelo antes de volcar.
+	// Give the in-flight body downloads a moment before dumping.
 	time.Sleep(time.Second)
 
 	r.mu.Lock()
@@ -265,18 +267,18 @@ func (r *recorder) dump(out string) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0o700); err != nil {
 		return err
 	}
-	// 0600: la captura lleva cookies de sesión y credenciales AWS en claro.
+	// 0600: the capture carries session cookies and AWS credentials in the clear.
 	if err := os.WriteFile(out, raw, 0o600); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "\n%d intercambios guardados en %s\n", len(list), out)
-	fmt.Fprintln(os.Stderr, "CUIDADO: contiene cookies y credenciales en claro. No lo publiques.")
+	fmt.Fprintf(os.Stderr, "\n%d exchanges saved in %s\n", len(list), out)
+	fmt.Fprintln(os.Stderr, "CAREFUL: it contains cookies and credentials in the clear. Do not publish it.")
 	return nil
 }
 
-// postDataOf reensambla el cuerpo del request. CDP lo entrega troceado y en
-// base64, y lo omite del todo cuando es demasiado grande.
+// postDataOf reassembles the request body. CDP delivers it in chunks and in
+// base64, and omits it entirely when it is too large.
 func postDataOf(req *network.Request) string {
 	if len(req.PostDataEntries) == 0 {
 		return ""
@@ -285,7 +287,7 @@ func postDataOf(req *network.Request) string {
 	for _, entry := range req.PostDataEntries {
 		decoded, err := base64.StdEncoding.DecodeString(entry.Bytes)
 		if err != nil {
-			// Si no era base64, lo guardamos tal cual antes que perderlo.
+			// If it was not base64, we store it as-is rather than lose it.
 			sb.WriteString(entry.Bytes)
 			continue
 		}
@@ -294,7 +296,7 @@ func postDataOf(req *network.Request) string {
 	return sb.String()
 }
 
-// requestPostData recupera un cuerpo que CDP no incluyó en el evento.
+// requestPostData retrieves a body that CDP did not include in the event.
 func requestPostData(ctx context.Context, id network.RequestID) (string, error) {
 	var data []byte
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
@@ -313,7 +315,7 @@ func headersOf(h network.Headers) map[string]string {
 	return out
 }
 
-// findBrowser localiza un navegador basado en Chromium.
+// findBrowser locates a Chromium-based browser.
 func findBrowser() (string, error) {
 	candidates := []string{
 		"google-chrome-stable", "google-chrome", "chromium", "chromium-browser",
@@ -324,8 +326,8 @@ func findBrowser() (string, error) {
 			return path, nil
 		}
 	}
-	return "", fmt.Errorf("no encontré un navegador basado en Chromium (probé: %s); "+
-		"indicá uno con -browser", strings.Join(candidates, ", "))
+	return "", fmt.Errorf("could not find a Chromium-based browser (tried: %s); "+
+		"point at one with -browser", strings.Join(candidates, ", "))
 }
 
 func splitHosts(s string) []string {

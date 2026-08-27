@@ -8,13 +8,13 @@ import (
 	"github.com/goslynn/awsacademycli/internal/httpx"
 )
 
-// Endpoints son las URLs que operan el laboratorio.
+// Endpoints are the URLs that operate the lab.
 //
-// Vocareum expone una sola entrada, /util/vcput.php, y distingue la operación
-// con el parámetro a=. Las URLs se guardan completas y absolutas porque llevan
-// parámetros propios de la sesión —stepid, version, mode, y a veces un token
-// encd— que no se pueden reconstruir desde fuera: hay que leerlas de la página
-// del laboratorio.
+// Vocareum exposes a single entry point, /util/vcput.php, and distinguishes the
+// operation with the a= parameter. The URLs are stored complete and absolute
+// because they carry session-specific parameters — stepid, version, mode, and
+// sometimes an encd token — that cannot be reconstructed from outside: they
+// have to be read from the lab page.
 type Endpoints struct {
 	Status      string `json:"status,omitempty"`
 	Start       string `json:"start,omitempty"`
@@ -22,9 +22,9 @@ type Endpoints struct {
 	Credentials string `json:"credentials,omitempty"`
 }
 
-// Las acciones de vcput.php que nos interesan. Vocareum sirve varios
-// proveedores de nube desde la misma página (startaws, startazure, startgcp);
-// aquí solo valen las de AWS.
+// The vcput.php actions we care about. Vocareum serves several cloud providers
+// from the same page (startaws, startazure, startgcp); only the AWS ones count
+// here.
 const (
 	actionStart  = "startaws"
 	actionStop   = "endaws"
@@ -32,23 +32,24 @@ const (
 	actionCreds  = "getaws"
 )
 
-// reVcput captura las llamadas a la API dentro del HTML y el JavaScript de la
-// página, con todos sus parámetros.
+// reVcput captures the API calls inside the page's HTML and JavaScript, with
+// all of their parameters.
 var reVcput = regexp.MustCompile(`["'\x60]([^"'\x60\s]*util/vcput\.php\?a=([A-Za-z_]+)[^"'\x60\s]*)["'\x60]`)
 
-// DetectEndpoints lee de la página del laboratorio las URLs que usan sus
-// propios botones.
+// DetectEndpoints reads from the lab page the URLs its own buttons use.
 //
-// Es la única forma fiable de obtenerlas: llevan identificadores de sesión, así
-// que ni se pueden compilar como constantes ni sobreviven de un curso a otro.
+// It is the only reliable way to obtain them: they carry session identifiers,
+// so they can neither be compiled in as constants nor survive from one course
+// to the next.
 func DetectEndpoints(page *httpx.Response) Endpoints {
 	var found Endpoints
 
 	for _, m := range reVcput.FindAllStringSubmatch(page.String(), -1) {
 		raw, action := m[1], m[2]
 
-		// Se guardan absolutas: las de la página son relativas a /main/ y
-		// resolverlas más tarde, contra otra base, daría una URL equivocada.
+		// They are stored absolute: the ones on the page are relative to /main/
+		// and resolving them later, against a different base, would give the
+		// wrong URL.
 		ref, err := url.Parse(strings.TrimSpace(raw))
 		if err != nil {
 			continue
@@ -69,20 +70,20 @@ func DetectEndpoints(page *httpx.Response) Endpoints {
 	return found
 }
 
-// setIfEmpty conserva la primera aparición: la página repite algunas llamadas
-// con parámetros parciales, y la primera suele ser la completa.
+// setIfEmpty keeps the first occurrence: the page repeats some calls with
+// partial parameters, and the first one is usually the complete one.
 func setIfEmpty(dst *string, value string) {
 	if *dst == "" {
 		*dst = value
 	}
 }
 
-// Complete indica si tenemos todo lo necesario para operar el laboratorio.
+// Complete reports whether we have everything needed to operate the lab.
 func (e Endpoints) Complete() bool {
 	return e.Status != "" && e.Start != "" && e.Stop != "" && e.Credentials != ""
 }
 
-// Missing nombra lo que falta, para poder decirlo en un error.
+// Missing names what is absent, so it can be said in an error.
 func (e Endpoints) Missing() []string {
 	var missing []string
 	for _, f := range []struct {
@@ -100,7 +101,7 @@ func (e Endpoints) Missing() []string {
 	return missing
 }
 
-// Merge superpone otros endpoints sobre estos; gana lo que traiga other.
+// Merge overlays other endpoints on top of these; whatever other carries wins.
 func (e Endpoints) Merge(other Endpoints) Endpoints {
 	setIfNotEmpty(&e.Status, other.Status)
 	setIfNotEmpty(&e.Start, other.Start)
@@ -115,8 +116,8 @@ func setIfNotEmpty(dst *string, value string) {
 	}
 }
 
-// resolve convierte una ruta en URL absoluta contra el origen de Vocareum.
-// Las detectadas ya vienen absolutas y pasan tal cual.
+// resolve turns a path into an absolute URL against the Vocareum origin.
+// The detected ones already come absolute and pass through unchanged.
 func (e Endpoints) resolve(base, path string) string {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path
@@ -132,6 +133,6 @@ func (e Endpoints) resolve(base, path string) string {
 	return baseURL.ResolveReference(ref).String()
 }
 
-// StateDirHint nombra dónde se guardan los endpoints confirmados. Vive aquí
-// para que los mensajes de diagnóstico apunten al sitio correcto.
+// StateDirHint names where the confirmed endpoints are stored. It lives here so
+// that the diagnostic messages point at the right place.
 func StateDirHint() string { return "~/.local/state/awsacademy" }

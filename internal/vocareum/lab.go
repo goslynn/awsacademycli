@@ -9,68 +9,68 @@ import (
 	"github.com/goslynn/awsacademycli/internal/state"
 )
 
-// LabState es el estado del laboratorio.
+// LabState is the state of the lab.
 type LabState string
 
 const (
-	StateStopped  LabState = "detenido"
-	StateStarting LabState = "arrancando"
-	StateRunning  LabState = "corriendo"
-	StateStopping LabState = "deteniéndose"
-	StateUnknown  LabState = "desconocido"
+	StateStopped  LabState = "stopped"
+	StateStarting LabState = "starting"
+	StateRunning  LabState = "running"
+	StateStopping LabState = "stopping"
+	StateUnknown  LabState = "unknown"
 )
 
-// Status describe el laboratorio en un momento dado.
+// Status describes the lab at a given moment.
 type Status struct {
 	State LabState
-	// Remaining es lo que queda de sesión. Cero si no se pudo leer.
+	// Remaining is what is left of the session. Zero if it could not be read.
 	Remaining time.Duration
-	// BudgetUsed y BudgetTotal son el gasto en dólares.
+	// BudgetUsed and BudgetTotal are the spend in dollars.
 	BudgetUsed  float64
 	BudgetTotal float64
 }
 
-// Running indica si el laboratorio está listo para usarse.
+// Running reports whether the lab is ready to be used.
 func (s Status) Running() bool { return s.State == StateRunning }
 
-// Lab controla el laboratorio de una sesión.
+// Lab controls the lab of a session.
 type Lab struct {
 	session   *Session
 	endpoints Endpoints
 
-	// PollInterval separa las consultas mientras se espera el arranque.
-	// Arrancar tarda minutos: preguntar más seguido no lo acelera.
+	// PollInterval spaces out the queries while waiting for the start.
+	// Starting takes minutes: asking more often does not speed it up.
 	PollInterval time.Duration
 }
 
 const defaultPollInterval = 5 * time.Second
 
-// NewLab construye el controlador sobre una sesión ya lanzada.
+// NewLab builds the controller on top of an already-launched session.
 func NewLab(s *Session, ep Endpoints) *Lab {
 	return &Lab{session: s, endpoints: ep, PollInterval: defaultPollInterval}
 }
 
-// ErrEndpointsUnknown indica que no reconocimos la API en la página del
-// laboratorio, así que no hay nada contra lo que operar.
-var ErrEndpointsUnknown = errors.New("no reconocí la API del laboratorio en la página de Vocareum")
+// ErrEndpointsUnknown means we did not recognise the API on the lab page, so
+// there is nothing to operate against.
+var ErrEndpointsUnknown = errors.New("could not recognise the lab API on the Vocareum page")
 
-// check verifica que tenemos la URL necesaria antes de intentar usarla.
+// check verifies that we have the URL we need before trying to use it.
 func (l *Lab) check(endpoint, what string) error {
 	if endpoint == "" {
-		return fmt.Errorf("%w: falta el endpoint de %s (sin resolver: %v). "+
-			"Ejecutá 'awsacademy debug lab' para ver qué expone la página",
+		return fmt.Errorf("%w: the %s endpoint is missing (unresolved: %v). "+
+			"Run 'awsacademy debug lab' to see what the page exposes",
 			ErrEndpointsUnknown, what, l.endpoints.Missing())
 	}
 	return nil
 }
 
-// Session devuelve la sesión sobre la que opera el laboratorio.
+// Session returns the session the lab operates on.
 func (l *Lab) Session() *Session { return l.session }
 
-// Endpoints devuelve los endpoints en uso, para poder cachearlos.
+// Endpoints returns the endpoints in use, so they can be cached.
 func (l *Lab) Endpoints() Endpoints { return l.endpoints }
 
-// Status consulta el estado actual del laboratorio.
+// Status queries the current state of the lab.
 func (l *Lab) Status(ctx context.Context) (*Status, error) {
 	body, err := l.poll(ctx)
 	if err != nil {
@@ -79,20 +79,21 @@ func (l *Lab) Status(ctx context.Context) (*Status, error) {
 	return parseStatus(body), nil
 }
 
-// Start pide a Vocareum que levante el laboratorio.
+// Start asks Vocareum to bring the lab up.
 //
-// Es idempotente: si ya está corriendo, Vocareum extiende la sesión en vez de
-// reiniciarla, que es justo lo que queremos cuando se llama dos veces.
+// It is idempotent: if it is already running, Vocareum extends the session
+// instead of restarting it, which is exactly what we want when it is called
+// twice.
 func (l *Lab) Start(ctx context.Context) error {
-	return l.command(ctx, l.endpoints.Start, "arrancar")
+	return l.command(ctx, l.endpoints.Start, "start")
 }
 
-// Stop pide a Vocareum que detenga el laboratorio.
+// Stop asks Vocareum to bring the lab down.
 func (l *Lab) Stop(ctx context.Context) error {
-	return l.command(ctx, l.endpoints.Stop, "detener")
+	return l.command(ctx, l.endpoints.Stop, "stop")
 }
 
-// WaitForRunning espera a que el laboratorio termine de arrancar.
+// WaitForRunning waits for the lab to finish starting.
 func (l *Lab) WaitForRunning(ctx context.Context, timeout time.Duration, onTick func(Status)) (*Status, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -104,10 +105,10 @@ func (l *Lab) WaitForRunning(ctx context.Context, timeout time.Duration, onTick 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// El último estado visto se guarda aparte porque el plazo puede vencer en
-	// mitad de una consulta: entonces el error que sube es un
-	// "context deadline exceeded" que no le dice nada a nadie, cuando lo que
-	// hace falta saber es en qué se quedó atascado el laboratorio.
+	// The last state seen is kept aside because the deadline may expire in the
+	// middle of a query: the error that surfaces then is a "context deadline
+	// exceeded" that tells nobody anything, when what is needed is to know
+	// where the lab got stuck.
 	last := StateUnknown
 
 	for {
@@ -136,12 +137,12 @@ func (l *Lab) WaitForRunning(ctx context.Context, timeout time.Duration, onTick 
 
 func timeoutError(timeout time.Duration, last LabState) error {
 	return fmt.Errorf(
-		"el laboratorio no llegó a estar listo en %s (último estado: %s)", timeout, last)
+		"the lab did not become ready within %s (last state: %s)", timeout, last)
 }
 
-// Credentials lee las credenciales AWS del panel de detalles.
+// Credentials reads the AWS credentials from the details panel.
 func (l *Lab) Credentials(ctx context.Context) (*state.Credentials, error) {
-	if err := l.check(l.endpoints.Credentials, "credenciales"); err != nil {
+	if err := l.check(l.endpoints.Credentials, "credentials"); err != nil {
 		return nil, err
 	}
 	resp, err := l.session.http.Get(ctx, l.endpoints.resolve(l.session.base, l.endpoints.Credentials))
@@ -153,8 +154,8 @@ func (l *Lab) Credentials(ctx context.Context) (*state.Credentials, error) {
 	if err != nil {
 		return nil, err
 	}
-	// La misma respuesta trae cuándo expira la sesión, así que no hace falta
-	// una consulta extra. El instante exacto es preferible al contador.
+	// The same response carries when the session expires, so no extra query is
+	// needed. The exact instant is preferable to the countdown.
 	if exp, ok := ParseExpiry(body); ok {
 		creds.Expiration = exp
 	} else if remaining, ok := ParseRemaining(body); ok {
@@ -163,12 +164,12 @@ func (l *Lab) Credentials(ctx context.Context) (*state.Credentials, error) {
 	return creds, nil
 }
 
-// Details consulta de una sola vez las credenciales y el estado de la sesión.
+// Details queries the credentials and the session state in one go.
 //
-// Vocareum los sirve juntos en la respuesta de a=getaws, así que pedirlos por
-// separado sería una llamada de más.
+// Vocareum serves them together in the a=getaws response, so asking for them
+// separately would be one call too many.
 func (l *Lab) Details(ctx context.Context) (*Status, *state.Credentials, error) {
-	if err := l.check(l.endpoints.Credentials, "credenciales"); err != nil {
+	if err := l.check(l.endpoints.Credentials, "credentials"); err != nil {
 		return nil, nil, err
 	}
 	resp, err := l.session.http.Get(ctx, l.endpoints.resolve(l.session.base, l.endpoints.Credentials))
@@ -189,7 +190,7 @@ func (l *Lab) Details(ctx context.Context) (*Status, *state.Credentials, error) 
 	if st.Remaining == 0 && !creds.Expiration.IsZero() {
 		st.Remaining = time.Until(creds.Expiration)
 	}
-	// Si hay credenciales servidas, el laboratorio está en marcha.
+	// If credentials are being served, the lab is up and running.
 	if st.State == StateUnknown {
 		st.State = StateRunning
 	}
@@ -197,12 +198,12 @@ func (l *Lab) Details(ctx context.Context) (*Status, *state.Credentials, error) 
 }
 
 func (l *Lab) poll(ctx context.Context) (string, error) {
-	if err := l.check(l.endpoints.Status, "estado"); err != nil {
+	if err := l.check(l.endpoints.Status, "status"); err != nil {
 		return "", err
 	}
 	resp, err := l.session.http.Get(ctx, l.endpoints.resolve(l.session.base, l.endpoints.Status))
 	if err != nil {
-		return "", fmt.Errorf("no pude consultar el estado del laboratorio: %w", err)
+		return "", fmt.Errorf("could not query the lab status: %w", err)
 	}
 	return resp.String(), nil
 }
@@ -213,20 +214,20 @@ func (l *Lab) command(ctx context.Context, endpoint, verb string) error {
 	}
 	resp, err := l.session.http.Get(ctx, l.endpoints.resolve(l.session.base, endpoint))
 	if err != nil {
-		return fmt.Errorf("no pude %s el laboratorio: %w", verb, err)
+		return fmt.Errorf("could not %s the lab: %w", verb, err)
 	}
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("Vocareum devolvió HTTP %d al %s el laboratorio", resp.StatusCode, verb)
+		return fmt.Errorf("Vocareum returned HTTP %d while trying to %s the lab", resp.StatusCode, verb)
 	}
 	return nil
 }
 
-// parseStatus interpreta la respuesta de estado.
+// parseStatus interprets the status response.
 //
-// Vocareum contesta en texto plano ("Lab status: ready"), así que se lee esa
-// etiqueta en vez de rastrear palabras sueltas por todo el cuerpo: en una
-// página de cientos de kilobytes, buscar "red" o "ready" al azar produce
-// coincidencias dentro de otras palabras.
+// Vocareum answers in plain text ("Lab status: ready"), so that label is read
+// instead of hunting for loose words across the body: in a page of hundreds of
+// kilobytes, searching for "red" or "ready" at random produces matches inside
+// other words.
 func parseStatus(body string) *Status {
 	st := &Status{State: StateUnknown}
 
@@ -235,8 +236,8 @@ func parseStatus(body string) *Status {
 	}
 	if remaining, ok := ParseRemaining(body); ok {
 		st.Remaining = remaining
-		// Un contador corriendo prueba que hay sesión, aunque la etiqueta de
-		// estado no viniera en esta respuesta.
+		// A running countdown proves there is a session, even if the status
+		// label did not come in this response.
 		if st.State == StateUnknown && remaining > 0 {
 			st.State = StateRunning
 		}

@@ -1,8 +1,8 @@
-// Package config carga y persiste la configuración del usuario.
+// Package config loads and persists the user configuration.
 //
-// El fichero vive en $XDG_CONFIG_HOME/awsacademy/config.toml y contiene la
-// contraseña de AWS Academy en claro, así que el paquete se niega a leerlo si
-// los permisos son más laxos que 0600.
+// The file lives in $XDG_CONFIG_HOME/awsacademy/config.toml and contains the
+// AWS Academy password in the clear, so the package refuses to read it if the
+// permissions are looser than 0600.
 package config
 
 import (
@@ -18,42 +18,42 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// DefaultCanvasBaseURL es el Canvas de AWS Academy. Configurable por si cambia
-// de dominio, pero nunca hay que tocarlo en condiciones normales.
+// DefaultCanvasBaseURL is the AWS Academy Canvas. Configurable in case the
+// domain changes, but it should never need touching under normal conditions.
 const DefaultCanvasBaseURL = "https://awsacademy.instructure.com"
 
-// DefaultAWSProfile es el perfil de ~/.aws que mantiene la herramienta.
+// DefaultAWSProfile is the ~/.aws profile the tool maintains.
 const DefaultAWSProfile = "academy"
 
-// ErrNotConfigured indica que todavía no se corrió `awsacademy setup`.
-var ErrNotConfigured = errors.New("no hay configuración: ejecutá 'awsacademy setup'")
+// ErrNotConfigured means `awsacademy setup` has not been run yet.
+var ErrNotConfigured = errors.New("no configuration: run 'awsacademy setup'")
 
-// Config es el contenido de config.toml.
+// Config is the contents of config.toml.
 type Config struct {
-	// Email es el usuario de AWS Academy (Canvas lo llama "Email").
+	// Email is the AWS Academy username (Canvas calls it "Email").
 	Email string `toml:"email"`
-	// Password se guarda en claro. Vacío si se usa PasswordCommand.
+	// Password is stored in the clear. Empty when PasswordCommand is used.
 	Password string `toml:"password,omitempty"`
-	// PasswordCommand se ejecuta con `sh -c` y su stdout (recortado) es la
-	// contraseña. Tiene precedencia sobre Password.
+	// PasswordCommand is run with `sh -c` and its (trimmed) stdout is the
+	// password. It takes precedence over Password.
 	PasswordCommand string `toml:"password_command,omitempty"`
 
 	CanvasBaseURL string `toml:"canvas_base_url"`
 	AWSProfile    string `toml:"aws_profile"`
 	Region        string `toml:"region"`
 
-	// CourseID fija el curso que tiene el laboratorio. Se escribe siempre,
-	// aunque esté vacío: si se omitiera, nadie descubriría que la clave
-	// existe justo cuando hace falta usarla.
+	// CourseID pins the course that has the lab. It is always written, even
+	// when empty: were it omitted, nobody would discover the key exists right
+	// when they need to use it.
 	CourseID string `toml:"course_id"`
 }
 
-// Path devuelve la ruta de config.toml.
+// Path returns the path of config.toml.
 func Path() string {
 	return filepath.Join(xdg.ConfigHome, "awsacademy", "config.toml")
 }
 
-// Load lee la configuración y valida sus permisos.
+// Load reads the configuration and validates its permissions.
 func Load() (*Config, error) {
 	path := Path()
 	info, err := os.Stat(path)
@@ -63,11 +63,11 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// La contraseña vive acá en claro: cualquier bit fuera del dueño es un
-	// problema, y preferimos frenar antes que filtrarla en silencio.
+	// The password lives here in the clear: any bit outside the owner is a
+	// problem, and we would rather stop than leak it silently.
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
 		return nil, fmt.Errorf(
-			"permisos inseguros en %s: %04o (esperado 0600) — corregí con: chmod 600 %s",
+			"insecure permissions on %s: %04o (expected 0600) — fix with: chmod 600 %s",
 			path, perm, path)
 	}
 
@@ -77,7 +77,7 @@ func Load() (*Config, error) {
 	}
 	var cfg Config
 	if err := toml.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("config.toml inválido: %w", err)
+		return nil, fmt.Errorf("invalid config.toml: %w", err)
 	}
 	cfg.applyDefaults()
 	return &cfg, cfg.validate()
@@ -98,15 +98,15 @@ func (c *Config) applyDefaults() {
 
 func (c *Config) validate() error {
 	if c.Email == "" {
-		return errors.New("config.toml: falta 'email'")
+		return errors.New("config.toml: 'email' is missing")
 	}
 	if c.Password == "" && c.PasswordCommand == "" {
-		return errors.New("config.toml: falta 'password' o 'password_command'")
+		return errors.New("config.toml: 'password' or 'password_command' is missing")
 	}
 	return nil
 }
 
-// Save escribe config.toml con permisos 0600, creando el directorio si hace falta.
+// Save writes config.toml with permissions 0600, creating the directory if needed.
 func (c *Config) Save() error {
 	c.applyDefaults()
 	path := Path()
@@ -120,7 +120,7 @@ func (c *Config) Save() error {
 	return atomicfile.Write(path, raw, 0o600)
 }
 
-// ResolvePassword devuelve la contraseña, ejecutando PasswordCommand si está definido.
+// ResolvePassword returns the password, running PasswordCommand if it is set.
 func (c *Config) ResolvePassword() (string, error) {
 	if c.PasswordCommand == "" {
 		return c.Password, nil
@@ -129,13 +129,13 @@ func (c *Config) ResolvePassword() (string, error) {
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && len(exit.Stderr) > 0 {
-			return "", fmt.Errorf("password_command falló: %s", strings.TrimSpace(string(exit.Stderr)))
+			return "", fmt.Errorf("password_command failed: %s", strings.TrimSpace(string(exit.Stderr)))
 		}
-		return "", fmt.Errorf("password_command falló: %w", err)
+		return "", fmt.Errorf("password_command failed: %w", err)
 	}
 	pw := strings.TrimRight(string(out), "\r\n")
 	if pw == "" {
-		return "", errors.New("password_command no devolvió nada")
+		return "", errors.New("password_command returned nothing")
 	}
 	return pw, nil
 }

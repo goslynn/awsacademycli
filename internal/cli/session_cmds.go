@@ -11,11 +11,11 @@ func newLoginCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Abre sesión en AWS Academy",
-		Long: `Abre sesión en Canvas y guarda las cookies.
+		Short: "Open a session on AWS Academy",
+		Long: `Opens a session on Canvas and saves the cookies.
 
-Normalmente no hace falta llamarlo: los demás comandos se autentican solos
-cuando la sesión guardada caducó.`,
+Calling it is not normally necessary: the other commands authenticate on their
+own when the saved session has expired.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			app, err := newApp(flagDebugHTTP)
@@ -23,8 +23,8 @@ cuando la sesión guardada caducó.`,
 				return err
 			}
 			if force {
-				// Con --force queremos probar la contraseña de verdad, no
-				// revalidar la sesión que ya teníamos.
+				// With --force we want to test the password for real, not
+				// revalidate the session we already had.
 				if err := state.ClearSession(); err != nil {
 					return err
 				}
@@ -40,11 +40,11 @@ cuando la sesión guardada caducó.`,
 					"user_id":       user.ID,
 				})
 			}
-			fmt.Printf("Sesión abierta como %s\n", user.Name)
+			fmt.Printf("Session opened as %s\n", user.Name)
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "reautenticar aunque la sesión siga viva")
+	cmd.Flags().BoolVar(&force, "force", false, "reauthenticate even if the session is still alive")
 	return cmd
 }
 
@@ -52,11 +52,12 @@ func newLogoutCmd() *cobra.Command {
 	var alsoDiscovery bool
 	cmd := &cobra.Command{
 		Use:   "logout",
-		Short: "Borra la sesión guardada",
-		Long: `Elimina las cookies guardadas en disco.
+		Short: "Delete the saved session",
+		Long: `Removes the cookies saved on disk.
 
-No cierra la sesión en el servidor ni toca tu configuración: la próxima
-operación volverá a autenticarse con las credenciales guardadas.`,
+It does not close the session on the server and does not touch your
+configuration: the next operation will authenticate again with the saved
+credentials.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if err := state.ClearSession(); err != nil {
@@ -70,11 +71,11 @@ operación volverá a autenticarse con las credenciales guardadas.`,
 			if flagJSON {
 				return printJSON(map[string]any{"cleared": true})
 			}
-			fmt.Println("Sesión borrada.")
+			fmt.Println("Session deleted.")
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&alsoDiscovery, "reset-discovery", false,
-		"olvidar además qué curso y qué ítem son el laboratorio")
+		"also forget which course and item are the lab")
 	return cmd
 }

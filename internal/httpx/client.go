@@ -1,11 +1,11 @@
-// Package httpx es un cliente HTTP que se comporta lo suficientemente parecido
-// a un navegador como para atravesar Canvas y el lanzamiento LTI hacia Vocareum.
+// Package httpx is an HTTP client that behaves enough like a browser to get
+// through Canvas and the LTI launch into Vocareum.
 //
-// Ninguno de los dos servicios necesita ejecutar JavaScript para lo que hacemos:
-// tanto LTI 1.1 (un form firmado con OAuth1) como LTI 1.3 (el baile OIDC) se
-// reducen, desde el lado del cliente, a "seguí los redirects y reenviá el form
-// que la página trae auto-enviado". Navigate implementa exactamente eso, por lo
-// que no hace falta saber de antemano qué versión de LTI usa el curso.
+// Neither service needs JavaScript executed for what we do: both LTI 1.1 (a
+// form signed with OAuth1) and LTI 1.3 (the OIDC dance) reduce, from the client
+// side, to "follow the redirects and resubmit the form the page carries
+// self-submitted". Navigate implements exactly that, which is why there is no
+// need to know in advance which LTI version the course uses.
 package httpx
 
 import (
@@ -22,34 +22,34 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-// UserAgent identifica a la herramienta con honestidad. No imitamos un
-// navegador real: si el servicio quiere distinguir este tráfico, puede.
+// UserAgent identifies the tool honestly. We do not imitate a real browser: if
+// the service wants to tell this traffic apart, it can.
 const UserAgent = "awsacademycli/0.1 (+https://github.com/goslynn/awsacademycli)"
 
-// maxHops acota la cadena de redirects y auto-submits. El lanzamiento LTI usa
-// media docena; más que esto es un bucle.
+// maxHops bounds the chain of redirects and auto-submits. The LTI launch uses
+// half a dozen; more than this is a loop.
 const maxHops = 15
 
-// Client es un http.Client con cookie jar, reintentos y auto-submit de forms.
+// Client is an http.Client with a cookie jar, retries and form auto-submit.
 type Client struct {
 	http *http.Client
 	jar  *cookiejar.Jar
 
-	// mu serializa los requests. No paralelizamos contra servicios de terceros:
-	// una herramienta personal no gana nada con concurrencia y sí puede
-	// hacerse notar de más.
+	// mu serialises the requests. We do not parallelise against third-party
+	// services: a personal tool gains nothing from concurrency and can well
+	// make itself more noticeable than it should.
 	mu sync.Mutex
 
-	// origins registra los orígenes visitados para poder persistir el jar,
-	// ya que cookiejar solo entrega cookies cuando se le pregunta por una URL.
+	// origins records the visited origins so the jar can be persisted, since
+	// cookiejar only hands cookies over when asked about a URL.
 	originsMu sync.Mutex
 	origins   map[string]struct{}
 
-	// Debug, si no es nil, recibe una línea por request. Lo usa --debug-http.
+	// Debug, when not nil, receives one line per request. --debug-http uses it.
 	Debug func(format string, args ...any)
 }
 
-// New construye un cliente con jar vacío.
+// New builds a client with an empty jar.
 func New() (*Client, error) {
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	if err != nil {
@@ -62,8 +62,8 @@ func New() (*Client, error) {
 	c.http = &http.Client{
 		Jar:     jar,
 		Timeout: 60 * time.Second,
-		// Cortamos los redirects automáticos para poder registrar cada salto
-		// y contarlos contra maxHops junto con los auto-submits.
+		// We cut off the automatic redirects so we can record every hop and
+		// count them against maxHops together with the auto-submits.
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -71,29 +71,29 @@ func New() (*Client, error) {
 	return c, nil
 }
 
-// Response es una respuesta con el cuerpo ya leído y la URL donde terminamos.
+// Response is a response with the body already read and the URL we ended at.
 type Response struct {
 	StatusCode int
 	Header     http.Header
 	Body       []byte
-	// URL es la dirección final tras seguir redirects y auto-submits.
+	// URL is the final address after following redirects and auto-submits.
 	URL *url.URL
 }
 
-// String devuelve el cuerpo como texto.
+// String returns the body as text.
 func (r *Response) String() string { return string(r.Body) }
 
-// IsHTML indica si la respuesta trae HTML.
+// IsHTML reports whether the response carries HTML.
 func (r *Response) IsHTML() bool {
 	return strings.Contains(r.Header.Get("Content-Type"), "text/html")
 }
 
-// IsJSON indica si la respuesta trae JSON.
+// IsJSON reports whether the response carries JSON.
 func (r *Response) IsJSON() bool {
 	return strings.Contains(r.Header.Get("Content-Type"), "json")
 }
 
-// Get hace un GET siguiendo la cadena completa.
+// Get performs a GET, following the complete chain.
 func (c *Client) Get(ctx context.Context, rawurl string) (*Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
@@ -102,7 +102,7 @@ func (c *Client) Get(ctx context.Context, rawurl string) (*Response, error) {
 	return c.Navigate(ctx, req)
 }
 
-// PostForm envía un formulario siguiendo la cadena completa.
+// PostForm submits a form, following the complete chain.
 func (c *Client) PostForm(ctx context.Context, rawurl string, values url.Values) (*Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rawurl, strings.NewReader(values.Encode()))
 	if err != nil {
@@ -112,8 +112,8 @@ func (c *Client) PostForm(ctx context.Context, rawurl string, values url.Values)
 	return c.Navigate(ctx, req)
 }
 
-// Navigate ejecuta el request y sigue la cadena de redirects y formularios
-// auto-enviados hasta llegar a una página que de verdad es el destino.
+// Navigate runs the request and follows the chain of redirects and
+// self-submitting forms until it reaches a page that really is the destination.
 func (c *Client) Navigate(ctx context.Context, req *http.Request) (*Response, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -124,7 +124,7 @@ func (c *Client) Navigate(ctx context.Context, req *http.Request) (*Response, er
 			return nil, err
 		}
 
-		// Redirect: seguimos manualmente para contarlo como salto.
+		// Redirect: we follow it by hand so it counts as a hop.
 		if loc := redirectTarget(resp); loc != nil {
 			next, err := followRedirect(ctx, req, resp, loc)
 			if err != nil {
@@ -134,7 +134,7 @@ func (c *Client) Navigate(ctx context.Context, req *http.Request) (*Response, er
 			continue
 		}
 
-		// ¿Es una página cuyo único propósito es reenviar un formulario?
+		// Is this a page whose only purpose is to resubmit a form?
 		if resp.IsHTML() {
 			form, err := findAutoSubmitForm(resp)
 			if err != nil {
@@ -153,10 +153,10 @@ func (c *Client) Navigate(ctx context.Context, req *http.Request) (*Response, er
 
 		return resp, nil
 	}
-	return nil, fmt.Errorf("demasiados saltos (%d) siguiendo la cadena de navegación", maxHops)
+	return nil, fmt.Errorf("too many hops (%d) following the navigation chain", maxHops)
 }
 
-// do ejecuta un único request con reintentos ante fallos transitorios.
+// do runs a single request with retries on transient failures.
 func (c *Client) do(ctx context.Context, req *http.Request) (*Response, error) {
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", UserAgent)
@@ -167,12 +167,12 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*Response, error) {
 	c.rememberOrigin(req.URL)
 
 	var lastErr error
-	// Backoff exponencial ante 429 y 5xx: si el servicio nos está pidiendo
-	// que bajemos el ritmo, insistir de inmediato solo empeora las cosas.
+	// Exponential backoff on 429 and 5xx: if the service is asking us to slow
+	// down, insisting straight away only makes things worse.
 	for attempt := 0; attempt < 4; attempt++ {
 		if attempt > 0 {
 			delay := time.Duration(1<<uint(attempt-1)) * time.Second
-			c.debugf("reintento %d tras %s (%v)", attempt, delay, lastErr)
+			c.debugf("retry %d after %s (%v)", attempt, delay, lastErr)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -202,7 +202,7 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*Response, error) {
 			req.Method, req.URL, raw.StatusCode, len(data), time.Since(start).Round(time.Millisecond))
 
 		if raw.StatusCode == http.StatusTooManyRequests || raw.StatusCode >= 500 {
-			lastErr = fmt.Errorf("HTTP %d de %s", raw.StatusCode, req.URL.Host)
+			lastErr = fmt.Errorf("HTTP %d from %s", raw.StatusCode, req.URL.Host)
 			continue
 		}
 		return &Response{
@@ -212,10 +212,10 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*Response, error) {
 			URL:        raw.Request.URL,
 		}, nil
 	}
-	return nil, fmt.Errorf("request a %s falló tras 4 intentos: %w", req.URL, lastErr)
+	return nil, fmt.Errorf("request to %s failed after 4 attempts: %w", req.URL, lastErr)
 }
 
-// rewind devuelve un cuerpo fresco para reintentar el mismo request.
+// rewind returns a fresh body so the same request can be retried.
 func rewind(req *http.Request) (io.ReadCloser, error) {
 	if req.GetBody == nil {
 		return req.Body, nil
@@ -229,7 +229,7 @@ func (c *Client) debugf(format string, args ...any) {
 	}
 }
 
-// redirectTarget devuelve la URL de destino si la respuesta es un redirect.
+// redirectTarget returns the destination URL if the response is a redirect.
 func redirectTarget(resp *Response) *url.URL {
 	switch resp.StatusCode {
 	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
@@ -248,8 +248,8 @@ func redirectTarget(resp *Response) *url.URL {
 	return resp.URL.ResolveReference(target)
 }
 
-// followRedirect construye el request siguiente respetando la semántica de
-// cada código: 303 y (por convención universal) 301/302 sobre POST pasan a GET.
+// followRedirect builds the next request respecting each code's semantics: 303
+// and (by universal convention) 301/302 over POST become GET.
 func followRedirect(ctx context.Context, prev *http.Request, resp *Response, target *url.URL) (*http.Request, error) {
 	method := prev.Method
 	var body io.Reader
@@ -262,7 +262,7 @@ func followRedirect(ctx context.Context, prev *http.Request, resp *Response, tar
 			method = http.MethodGet
 		}
 	default:
-		// 307 y 308 preservan método y cuerpo.
+		// 307 and 308 preserve method and body.
 		if prev.GetBody != nil {
 			b, err := prev.GetBody()
 			if err != nil {

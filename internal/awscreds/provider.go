@@ -13,19 +13,19 @@ import (
 	"github.com/goslynn/awsacademycli/internal/state"
 )
 
-// processOutput es el contrato de credential_process del AWS CLI.
-// Ver: https://docs.aws.amazon.com/cli/latest/topic/config-vars.html
+// processOutput is the AWS CLI's credential_process contract.
+// See: https://docs.aws.amazon.com/cli/latest/topic/config-vars.html
 type processOutput struct {
 	Version         int    `json:"Version"`
 	AccessKeyID     string `json:"AccessKeyId"`
 	SecretAccessKey string `json:"SecretAccessKey"`
 	SessionToken    string `json:"SessionToken"`
-	// Expiration le dice al CLI cuándo volver a preguntar. Sin ella, cachearía
-	// las credenciales para siempre y seguiría usándolas ya muertas.
+	// Expiration tells the CLI when to ask again. Without it, it would cache
+	// the credentials forever and keep using them once dead.
 	Expiration string `json:"Expiration,omitempty"`
 }
 
-// ProcessOutput serializa las credenciales en el formato que espera el AWS CLI.
+// ProcessOutput serialises the credentials in the format the AWS CLI expects.
 func ProcessOutput(creds *state.Credentials) ([]byte, error) {
 	out := processOutput{
 		Version:         1,
@@ -39,19 +39,19 @@ func ProcessOutput(creds *state.Credentials) ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// Identity es lo que devuelve sts:GetCallerIdentity.
+// Identity is what sts:GetCallerIdentity returns.
 type Identity struct {
 	Account string
 	ARN     string
 	UserID  string
 }
 
-// Validate comprueba contra AWS que unas credenciales sirven de verdad.
+// Validate checks against AWS that a set of credentials really works.
 //
-// Usa un proveedor estático a propósito, en vez de la cadena por defecto: si el
-// perfil está configurado con credential_process, resolverlo por la cadena
-// haría que este binario se invocara a sí mismo. Además, lo que queremos saber
-// es si estas credenciales concretas funcionan.
+// It uses a static provider on purpose, rather than the default chain: if the
+// profile is configured with credential_process, resolving it through the chain
+// would make this binary invoke itself. Besides, what we want to know is
+// whether these particular credentials work.
 func Validate(ctx context.Context, creds *state.Credentials, region string) (*Identity, error) {
 	if region == "" {
 		region = "us-east-1"
@@ -60,8 +60,8 @@ func Validate(ctx context.Context, creds *state.Credentials, region string) (*Id
 		awsconfig.WithRegion(region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken)),
-		// Sin esto el SDK aún leería ~/.aws en busca de otros ajustes y podría
-		// volver a toparse con el credential_process.
+		// Without this the SDK would still read ~/.aws looking for other
+		// settings and could run into the credential_process again.
 		awsconfig.WithSharedConfigProfile(""),
 	)
 	if err != nil {
@@ -82,8 +82,8 @@ func Validate(ctx context.Context, creds *state.Credentials, region string) (*Id
 	}, nil
 }
 
-// ReadSharedCredentials lee las credenciales que hay escritas en el perfil.
-// Sirve para que `status` diga si lo que el usuario tiene en disco todavía vale.
+// ReadSharedCredentials reads the credentials written in the profile.
+// It lets `status` say whether what the user has on disk is still valid.
 func ReadSharedCredentials(profile string) (*state.Credentials, error) {
 	f, err := loadINI(CredentialsPath())
 	if err != nil {
@@ -92,7 +92,7 @@ func ReadSharedCredentials(profile string) (*state.Credentials, error) {
 	sec := f.Section(profile)
 	id := sec.Key("aws_access_key_id").String()
 	if id == "" {
-		return nil, fmt.Errorf("el perfil %q no tiene credenciales en %s", profile, CredentialsPath())
+		return nil, fmt.Errorf("profile %q has no credentials in %s", profile, CredentialsPath())
 	}
 	return &state.Credentials{
 		AccessKeyID:     id,

@@ -1,9 +1,9 @@
-// Package canvas habla con el Canvas de AWS Academy.
+// Package canvas talks to the AWS Academy Canvas.
 //
-// Canvas sirve su login con React, pero por debajo sigue siendo Rails clásico:
-// un POST con el token CSRF que viene en una cookie. Y expone su API REST v1 a
-// la sesión del navegador, así que una vez logueados no hace falta scrapear
-// HTML para encontrar el curso ni el laboratorio.
+// Canvas serves its login with React, but underneath it is still classic Rails:
+// a POST with the CSRF token that arrives in a cookie. And it exposes its REST
+// API v1 to the browser session, so once logged in there is no need to scrape
+// HTML to find the course or the lab.
 package canvas
 
 import (
@@ -19,27 +19,27 @@ import (
 	"github.com/goslynn/awsacademycli/internal/httpx"
 )
 
-// ErrInvalidCredentials indica que Canvas rechazó usuario o contraseña.
-var ErrInvalidCredentials = errors.New("credenciales de AWS Academy inválidas")
+// ErrInvalidCredentials means Canvas rejected the username or the password.
+var ErrInvalidCredentials = errors.New("invalid AWS Academy credentials")
 
-// ErrNoSession indica que no hay sesión viva.
-var ErrNoSession = errors.New("sin sesión en Canvas")
+// ErrNoSession means there is no live session.
+var ErrNoSession = errors.New("no Canvas session")
 
-// Client habla con una instancia de Canvas.
+// Client talks to a Canvas instance.
 type Client struct {
 	http    *httpx.Client
 	baseURL string
 }
 
-// New construye un cliente sobre un httpx.Client ya configurado.
+// New builds a client on top of an already-configured httpx.Client.
 func New(h *httpx.Client, baseURL string) *Client {
 	return &Client{http: h, baseURL: strings.TrimRight(baseURL, "/")}
 }
 
-// BaseURL devuelve el origen de Canvas.
+// BaseURL returns the Canvas origin.
 func (c *Client) BaseURL() string { return c.baseURL }
 
-// User es el usuario logueado.
+// User is the logged-in user.
 type User struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
@@ -47,17 +47,17 @@ type User struct {
 	LoginID   string `json:"login_id"`
 }
 
-// Login autentica contra Canvas y deja la sesión en el cookie jar.
+// Login authenticates against Canvas and leaves the session in the cookie jar.
 //
-// El flujo es el de Rails: se pide la página para recibir la cookie con el
-// token CSRF y se devuelve ese mismo token en el POST. Pedimos remember_me
-// porque la cookie persistente que emite Canvas dura semanas, y así la
-// contraseña deja de hacer falta en el uso diario.
+// The flow is the Rails one: request the page to receive the cookie with the
+// CSRF token and send that same token back in the POST. We ask for remember_me
+// because the persistent cookie Canvas issues lasts weeks, so the password stops
+// being needed in daily use.
 func (c *Client) Login(ctx context.Context, email, password string) (*User, error) {
 	loginURL := c.baseURL + "/login/canvas"
 
 	if _, err := c.http.Get(ctx, loginURL); err != nil {
-		return nil, fmt.Errorf("no se pudo abrir el login: %w", err)
+		return nil, fmt.Errorf("could not open the login page: %w", err)
 	}
 
 	token, err := c.csrfToken()
@@ -73,12 +73,12 @@ func (c *Client) Login(ctx context.Context, email, password string) (*User, erro
 	}
 	resp, err := c.http.PostForm(ctx, loginURL, form)
 	if err != nil {
-		return nil, fmt.Errorf("el POST de login falló: %w", err)
+		return nil, fmt.Errorf("the login POST failed: %w", err)
 	}
 
-	// Canvas no distingue con el código de estado: ante un fallo devuelve la
-	// página de login otra vez. Lo único concluyente es preguntar quiénes
-	// somos, que además es lo que nos interesa saber.
+	// Canvas does not distinguish through the status code: on failure it
+	// returns the login page again. The only conclusive move is to ask who we
+	// are, which is also what we want to know.
 	user, err := c.Whoami(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNoSession) {
@@ -92,12 +92,12 @@ func (c *Client) Login(ctx context.Context, email, password string) (*User, erro
 	return user, nil
 }
 
-// csrfToken lee el token que Canvas dejó en la cookie _csrf_token.
-// Viaja percent-encoded, así que hay que decodificarlo antes de reenviarlo.
+// csrfToken reads the token Canvas left in the _csrf_token cookie.
+// It travels percent-encoded, so it has to be decoded before being sent back.
 func (c *Client) csrfToken() (string, error) {
 	raw := c.http.Cookie(c.baseURL, "_csrf_token")
 	if raw == "" {
-		return "", errors.New("Canvas no entregó la cookie _csrf_token; ¿cambió el login?")
+		return "", errors.New("Canvas did not hand over the _csrf_token cookie; did the login change?")
 	}
 	token, err := url.QueryUnescape(raw)
 	if err != nil {
@@ -106,7 +106,7 @@ func (c *Client) csrfToken() (string, error) {
 	return token, nil
 }
 
-// loginErrorMessage rescata el motivo que Canvas muestra al fallar el login.
+// loginErrorMessage rescues the reason Canvas shows when the login fails.
 var flashError = regexp.MustCompile(`(?s)<div[^>]*class="[^"]*ic-flash-error[^"]*"[^>]*>(.*?)</div>`)
 
 func loginErrorMessage(resp *httpx.Response) string {
@@ -118,8 +118,8 @@ func loginErrorMessage(resp *httpx.Response) string {
 	return strings.Join(strings.Fields(string(text)), " ")
 }
 
-// Whoami devuelve el usuario logueado, o ErrNoSession si la sesión murió.
-// Es la comprobación más barata que existe: un GET que responde 401 sin ambigüedad.
+// Whoami returns the logged-in user, or ErrNoSession if the session died.
+// It is the cheapest check there is: a GET that answers 401 unambiguously.
 func (c *Client) Whoami(ctx context.Context) (*User, error) {
 	var user User
 	if err := c.getJSON(ctx, "/api/v1/users/self", &user); err != nil {
@@ -128,15 +128,15 @@ func (c *Client) Whoami(ctx context.Context) (*User, error) {
 	return &user, nil
 }
 
-// getJSON hace un GET a la API y decodifica la respuesta.
+// getJSON performs a GET against the API and decodes the response.
 func (c *Client) getJSON(ctx context.Context, path string, dst any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	// Canvas acepta la sesión del navegador para su API si acompañamos el
-	// token CSRF, igual que hace su propio frontend.
+	// Canvas accepts the browser session for its API as long as we send the
+	// CSRF token along, just like its own frontend does.
 	if token, err := c.csrfToken(); err == nil {
 		req.Header.Set("X-CSRF-Token", token)
 	}
@@ -149,10 +149,10 @@ func (c *Client) getJSON(ctx context.Context, path string, dst any) error {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return ErrNoSession
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("GET %s devolvió HTTP %d", path, resp.StatusCode)
+		return fmt.Errorf("GET %s returned HTTP %d", path, resp.StatusCode)
 	}
 	if err := json.Unmarshal(resp.Body, dst); err != nil {
-		return fmt.Errorf("respuesta inesperada de %s: %w", path, err)
+		return fmt.Errorf("unexpected response from %s: %w", path, err)
 	}
 	return nil
 }

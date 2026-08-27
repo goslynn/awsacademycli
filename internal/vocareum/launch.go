@@ -10,27 +10,27 @@ import (
 	"github.com/goslynn/awsacademycli/internal/httpx"
 )
 
-// Session es una sesión abierta contra el laboratorio.
+// Session is an open session against the lab.
 type Session struct {
 	http *httpx.Client
-	// base es el origen de Vocareum al que nos llevó el lanzamiento.
+	// base is the Vocareum origin the launch took us to.
 	base string
-	// page es la página del laboratorio tal como quedó tras el lanzamiento.
+	// page is the lab page as it stood after the launch.
 	page *httpx.Response
 }
 
-// Base devuelve el origen de Vocareum.
+// Base returns the Vocareum origin.
 func (s *Session) Base() string { return s.base }
 
-// Page devuelve la última página del laboratorio que vimos.
+// Page returns the last lab page we saw.
 func (s *Session) Page() *httpx.Response { return s.page }
 
-// Launch atraviesa el lanzamiento LTI desde Canvas hasta el laboratorio.
+// Launch goes through the LTI launch from Canvas all the way to the lab.
 //
-// Canvas no pone el formulario de lanzamiento en la página del ítem: la
-// envuelve en un iframe que apunta a external_tools/retrieve, y es dentro de
-// ese iframe donde está el form firmado. Por eso hay que seguir el iframe a
-// mano; a partir de ahí httpx.Navigate resuelve la cadena, sea LTI 1.1 o 1.3.
+// Canvas does not put the launch form on the item page: it wraps it in an
+// iframe pointing at external_tools/retrieve, and it is inside that iframe that
+// the signed form lives. That is why the iframe has to be followed by hand;
+// from there httpx.Navigate resolves the chain, be it LTI 1.1 or 1.3.
 func Launch(ctx context.Context, client *httpx.Client, launchURL string) (*Session, error) {
 	origin, err := url.Parse(launchURL)
 	if err != nil {
@@ -40,12 +40,12 @@ func Launch(ctx context.Context, client *httpx.Client, launchURL string) (*Sessi
 
 	resp, err := client.Get(ctx, launchURL)
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo abrir el ítem del laboratorio: %w", err)
+		return nil, fmt.Errorf("could not open the lab item: %w", err)
 	}
 
-	// Un lanzamiento LTI exitoso siempre acaba fuera del LMS, en el host del
-	// proveedor. Usamos eso como señal en vez de buscar el nombre "vocareum":
-	// el dominio del proveedor puede cambiar, que salgamos del LMS no.
+	// A successful LTI launch always ends up outside the LMS, on the provider's
+	// host. We use that as the signal instead of looking for the name
+	// "vocareum": the provider's domain may change, our leaving the LMS will not.
 	if resp.URL.Host == lmsHost {
 		if resp, err = leaveLMS(ctx, client, resp); err != nil {
 			return nil, err
@@ -54,10 +54,10 @@ func Launch(ctx context.Context, client *httpx.Client, launchURL string) (*Sessi
 
 	if resp.URL.Host == lmsHost {
 		return nil, fmt.Errorf(
-			"el lanzamiento LTI no salió de %s; terminó en %s", lmsHost, resp.URL)
+			"the LTI launch did not leave %s; it ended at %s", lmsHost, resp.URL)
 	}
 
-	// La primera página del proveedor suele ser un trampolín, no el panel.
+	// The provider's first page is usually a bounce page, not the panel.
 	if resp, err = followJSRedirects(ctx, client, resp); err != nil {
 		return nil, err
 	}
@@ -69,15 +69,15 @@ func Launch(ctx context.Context, client *httpx.Client, launchURL string) (*Sessi
 	}, nil
 }
 
-// leaveLMS da el salto desde la página de Canvas hacia el proveedor.
+// leaveLMS makes the jump from the Canvas page over to the provider.
 //
-// Canvas ofrece dos formas según la versión y la versión de LTI, y hay que
-// intentarlas en orden: un formulario oculto que su JavaScript envía (LTI 1.3),
-// o un iframe que carga la página de lanzamiento (LTI 1.1).
+// Canvas offers two ways depending on its version and on the LTI version, and
+// they have to be tried in order: a hidden form its JavaScript submits (LTI
+// 1.3), or an iframe that loads the launch page (LTI 1.1).
 func leaveLMS(ctx context.Context, client *httpx.Client, page *httpx.Response) (*httpx.Response, error) {
-	// El formulario de lanzamiento de Canvas se marca a sí mismo. Es una señal
-	// mucho más fiable que buscar una llamada a submit(), porque Canvas lo
-	// envía desde su bundle y no desde un script en la página.
+	// The Canvas launch form marks itself. That is a far more reliable signal
+	// than looking for a submit() call, because Canvas submits it from its
+	// bundle and not from a script on the page.
 	for _, selector := range []string{
 		`form[data-message-type="tool_launch"]`,
 		`form[id^="tool_form"]`,
@@ -91,7 +91,7 @@ func leaveLMS(ctx context.Context, client *httpx.Client, page *httpx.Response) (
 		}
 		resp, err := client.Submit(ctx, form)
 		if err != nil {
-			return nil, fmt.Errorf("el lanzamiento LTI falló al enviar %s: %w", selector, err)
+			return nil, fmt.Errorf("the LTI launch failed while submitting %s: %w", selector, err)
 		}
 		return resp, nil
 	}
@@ -102,23 +102,23 @@ func leaveLMS(ctx context.Context, client *httpx.Client, page *httpx.Response) (
 	}
 	if frameURL == "" {
 		return nil, fmt.Errorf(
-			"la página del laboratorio no traía ni el formulario de lanzamiento ni un iframe "+
-				"utilizable (terminamos en %s); ¿sigue la sesión de Canvas viva?", page.URL)
+			"the lab page carried neither the launch form nor a usable iframe "+
+				"(we ended at %s); is the Canvas session still alive?", page.URL)
 	}
 	resp, err := client.Get(ctx, frameURL)
 	if err != nil {
-		return nil, fmt.Errorf("el lanzamiento LTI falló: %w", err)
+		return nil, fmt.Errorf("the LTI launch failed: %w", err)
 	}
 	return resp, nil
 }
 
-// findToolFrame localiza el iframe en el que Canvas embebe la herramienta.
+// findToolFrame locates the iframe in which Canvas embeds the tool.
 func findToolFrame(resp *httpx.Response) (string, error) {
 	doc, err := resp.Document()
 	if err != nil {
 		return "", err
 	}
-	// Canvas ha usado varios nombres para este iframe según la versión.
+	// Canvas has used several names for this iframe across versions.
 	selectors := []string{
 		"iframe#tool_content",
 		"iframe.tool_launch",
@@ -128,8 +128,8 @@ func findToolFrame(resp *httpx.Response) (string, error) {
 	}
 	for _, sel := range selectors {
 		src, ok := doc.Find(sel).First().Attr("src")
-		// Canvas deja el iframe en about:blank y le pone la URL real por
-		// JavaScript, así que ese valor no lleva a ninguna parte.
+		// Canvas leaves the iframe at about:blank and sets the real URL with
+		// JavaScript, so that value leads nowhere.
 		if ok && src != "" && src != "about:blank" {
 			ref, err := url.Parse(src)
 			if err != nil {
@@ -141,7 +141,7 @@ func findToolFrame(resp *httpx.Response) (string, error) {
 	return "", nil
 }
 
-// Reload vuelve a pedir la página del laboratorio.
+// Reload requests the lab page again.
 func (s *Session) Reload(ctx context.Context) error {
 	resp, err := s.http.Get(ctx, s.page.URL.String())
 	if err != nil {
@@ -151,21 +151,21 @@ func (s *Session) Reload(ctx context.Context) error {
 	return nil
 }
 
-// Patrones de redirección por JavaScript.
+// JavaScript redirection patterns.
 //
-// Tras el lanzamiento LTI, Vocareum no sirve el panel directamente: devuelve un
-// trampolín cuyo único contenido es un script que navega al panel real. No hace
-// falta un motor de JavaScript para seguirlo, solo leer la URL.
+// After the LTI launch, Vocareum does not serve the panel directly: it returns
+// a bounce page whose only content is a script that navigates to the real
+// panel. Following it needs no JavaScript engine, only reading the URL.
 var jsRedirects = []*regexp.Regexp{
-	// El trampolín de Vocareum. El segundo argumento es un token para navegar
-	// sin cookies; como nosotros sí las tenemos, se ignora.
+	// Vocareum's bounce page. The second argument is a token for navigating
+	// without cookies; since we do have them, it is ignored.
 	regexp.MustCompile(`callPostIfCookiesDisabled\(\s*["']([^"']+)["']`),
-	// Redirecciones corrientes, por si el trampolín cambia de forma.
+	// Ordinary redirections, in case the bounce page changes shape.
 	regexp.MustCompile(`location\.(?:href|replace)\s*(?:=|\()\s*["']([^"']+)["']`),
 	regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=([^"'\s;]+)`),
 }
 
-// findJSRedirect devuelve la URL a la que la página se manda sola, o "".
+// findJSRedirect returns the URL the page sends itself to, or "".
 func findJSRedirect(page *httpx.Response) string {
 	body := page.String()
 	for _, re := range jsRedirects {
@@ -180,9 +180,9 @@ func findJSRedirect(page *httpx.Response) string {
 	return ""
 }
 
-// followJSRedirects sigue la cadena de trampolines hasta el panel real.
+// followJSRedirects follows the chain of bounce pages to the real panel.
 func followJSRedirects(ctx context.Context, client *httpx.Client, page *httpx.Response) (*httpx.Response, error) {
-	// Un par de saltos cubre el trampolín; más que eso es un bucle.
+	// A couple of hops covers the bounce page; more than that is a loop.
 	for hop := 0; hop < 3; hop++ {
 		next := findJSRedirect(page)
 		if next == "" || next == page.URL.String() {
@@ -190,7 +190,7 @@ func followJSRedirects(ctx context.Context, client *httpx.Client, page *httpx.Re
 		}
 		resp, err := client.Get(ctx, next)
 		if err != nil {
-			return nil, fmt.Errorf("no pude seguir al panel del laboratorio: %w", err)
+			return nil, fmt.Errorf("could not follow through to the lab panel: %w", err)
 		}
 		page = resp
 	}

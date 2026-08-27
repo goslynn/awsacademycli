@@ -1,4 +1,4 @@
-// Package cli implementa los comandos de la herramienta.
+// Package cli implements the tool's commands.
 package cli
 
 import (
@@ -17,17 +17,17 @@ import (
 	"github.com/goslynn/awsacademycli/internal/vocareum"
 )
 
-// App comparte entre comandos la configuración, la sesión y los clientes.
+// App shares the configuration, the session and the clients across commands.
 type App struct {
 	cfg    *config.Config
 	http   *httpx.Client
 	canvas *canvas.Client
 
-	// sessionDirty marca que hay cookies nuevas que conviene guardar.
+	// sessionDirty marks that there are new cookies worth saving.
 	sessionDirty bool
 }
 
-// newApp prepara la aplicación y restaura la sesión que hubiera en disco.
+// newApp prepares the application and restores whatever session is on disk.
 func newApp(debugHTTP bool) (*App, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -44,7 +44,7 @@ func newApp(debugHTTP bool) (*App, error) {
 		}
 	}
 
-	// Restaurar las cookies es lo que evita volver a loguearse en cada comando.
+	// Restoring the cookies is what avoids logging in again on every command.
 	if sess, err := state.LoadSession(); err == nil {
 		client.ImportCookies(sess.Cookies)
 	}
@@ -56,7 +56,7 @@ func newApp(debugHTTP bool) (*App, error) {
 	}, nil
 }
 
-// saveSession persiste las cookies actuales si cambiaron.
+// saveSession persists the current cookies if they changed.
 func (a *App) saveSession(user *canvas.User) error {
 	if !a.sessionDirty {
 		return nil
@@ -72,11 +72,11 @@ func (a *App) saveSession(user *canvas.User) error {
 	return sess.Save()
 }
 
-// EnsureSession devuelve una sesión viva, reautenticando solo si hace falta.
+// EnsureSession returns a live session, reauthenticating only when needed.
 //
-// Primero se prueba la sesión guardada, porque Canvas emite una cookie
-// persistente al pedir remember_me y suele durar semanas: así la contraseña
-// casi nunca entra en juego.
+// The saved session is tried first, because Canvas issues a persistent cookie
+// when remember_me is requested and it usually lasts weeks: that way the
+// password almost never comes into play.
 func (a *App) EnsureSession(ctx context.Context) (*canvas.User, error) {
 	if user, err := a.canvas.Whoami(ctx); err == nil {
 		return user, nil
@@ -96,10 +96,11 @@ func (a *App) EnsureSession(ctx context.Context) (*canvas.User, error) {
 	return user, a.saveSession(user)
 }
 
-// EnsureDiscovery devuelve dónde vive el laboratorio, descubriéndolo si hace falta.
+// EnsureDiscovery returns where the lab lives, discovering it if needed.
 func (a *App) EnsureDiscovery(ctx context.Context) (*state.Discovery, error) {
 	if disc, err := state.LoadDiscovery(); err == nil && disc.LaunchURL != "" {
-		// Si el usuario fijó un curso a mano y el caché apunta a otro, manda él.
+		// If the user pinned a course by hand and the cache points elsewhere,
+		// the user wins.
 		if a.cfg.CourseID == "" || a.cfg.CourseID == disc.CourseID {
 			return disc, nil
 		}
@@ -107,7 +108,7 @@ func (a *App) EnsureDiscovery(ctx context.Context) (*state.Discovery, error) {
 	return a.Discover(ctx)
 }
 
-// Discover localiza el curso y el ítem del laboratorio desde cero.
+// Discover locates the course and the lab item from scratch.
 func (a *App) Discover(ctx context.Context) (*state.Discovery, error) {
 	if _, err := a.EnsureSession(ctx); err != nil {
 		return nil, err
@@ -133,7 +134,7 @@ func (a *App) Discover(ctx context.Context) (*state.Discovery, error) {
 	return disc, disc.Save()
 }
 
-// pickCourse elige el curso: el que el usuario fijó, o el único activo.
+// pickCourse chooses the course: the one the user pinned, or the only active one.
 func (a *App) pickCourse(ctx context.Context) (*canvas.Course, error) {
 	if a.cfg.CourseID != "" {
 		return a.canvas.CourseByID(ctx, a.cfg.CourseID)
@@ -145,23 +146,23 @@ func (a *App) pickCourse(ctx context.Context) (*canvas.Course, error) {
 	}
 	switch len(courses) {
 	case 0:
-		return nil, errors.New("no hay cursos activos en tu cuenta de AWS Academy")
+		return nil, errors.New("there are no active courses in your AWS Academy account")
 	case 1:
 		return &courses[0], nil
 	}
 
-	// Con varios cursos no adivinamos: elegir mal significaría levantar el
-	// laboratorio equivocado. Pero el mensaje tiene que traer el comando que
-	// lo resuelve, no mandar a editar un fichero a ciegas.
-	msg := fmt.Sprintf("tenés %d cursos activos y ninguno fijado:\n\n", len(courses))
+	// With several courses we do not guess: choosing wrong would mean bringing
+	// up the wrong lab. But the message has to carry the command that settles
+	// it, not send the user off to edit a file blindly.
+	msg := fmt.Sprintf("you have %d active courses and none pinned:\n\n", len(courses))
 	for _, c := range courses {
 		msg += fmt.Sprintf("  %-8d %s\n", c.ID, c.Label())
 	}
-	msg += fmt.Sprintf("\nElegí uno con:\n  awsacademy courses --use %d", courses[suggestCourse(courses)].ID)
+	msg += fmt.Sprintf("\nPick one with:\n  awsacademy courses --use %d", courses[suggestCourse(courses)].ID)
 	return nil, errors.New(msg)
 }
 
-// OpenLab atraviesa el lanzamiento LTI y devuelve el laboratorio listo para operar.
+// OpenLab goes through the LTI launch and returns the lab ready to operate.
 func (a *App) OpenLab(ctx context.Context) (*vocareum.Lab, *state.Discovery, error) {
 	if _, err := a.EnsureSession(ctx); err != nil {
 		return nil, nil, err
@@ -173,8 +174,8 @@ func (a *App) OpenLab(ctx context.Context) (*vocareum.Lab, *state.Discovery, err
 
 	sess, err := vocareum.Launch(ctx, a.http, disc.LaunchURL)
 	if err != nil {
-		// Un curso archivado deja una URL cacheada que ya no lleva a ningún
-		// lado. Vale la pena reintentar una vez desde cero antes de rendirse.
+		// An archived course leaves a cached URL that no longer leads
+		// anywhere. It is worth retrying once from scratch before giving up.
 		fresh, err2 := a.Discover(ctx)
 		if err2 != nil {
 			return nil, nil, err
@@ -186,8 +187,8 @@ func (a *App) OpenLab(ctx context.Context) (*vocareum.Lab, *state.Discovery, err
 	}
 	a.sessionDirty = true
 
-	// Los endpoints que la propia página revela le ganan a lo que tengamos
-	// cacheado, y ambos le ganan a las conjeturas compiladas.
+	// The endpoints the page itself reveals beat whatever we have cached, and
+	// both beat the compiled-in guesses.
 	endpoints := toVocareumEndpoints(disc.Endpoints).
 		Merge(vocareum.DetectEndpoints(sess.Page()))
 
@@ -208,7 +209,7 @@ func fromVocareumEndpoints(e vocareum.Endpoints) state.Endpoints {
 	return state.Endpoints{Status: e.Status, Start: e.Start, Stop: e.Stop, Credentials: e.Credentials}
 }
 
-// selfCommand devuelve la invocación de este binario para credential_process.
+// selfCommand returns this binary's invocation for credential_process.
 func selfCommand() string {
 	exe, err := os.Executable()
 	if err != nil {

@@ -14,20 +14,20 @@ func newDefaultProfileCmd() *cobra.Command {
 	var undo bool
 	cmd := &cobra.Command{
 		Use:   "default-profile",
-		Short: "Usa el laboratorio como perfil de AWS por defecto",
-		Long: `Apunta el perfil "default" de ~/.aws/config a este proveedor de credenciales.
+		Short: "Use the lab as the default AWS profile",
+		Long: `Points the "default" profile in ~/.aws/config at this credential provider.
 
-Es la forma portable de no escribir --profile en cada comando: el perfil por
-defecto vive en un fichero de configuración de AWS, así que funciona igual en
-cualquier distribución, con cualquier shell, y también en macOS y Windows. No
-usa variables de entorno ni toca los ficheros de arranque de tu shell.
+This is the portable way to avoid typing --profile on every command: the
+default profile lives in an AWS configuration file, so it behaves the same on
+any distribution, with any shell, and on macOS and Windows too. It uses no
+environment variables and does not touch your shell startup files.
 
-Después de esto, ambas formas funcionan:
+After this, both forms work:
 
   aws sts get-caller-identity
   aws sts get-caller-identity --profile academy
 
-Para deshacerlo:
+To undo it:
 
   awsacademy default-profile --undo`,
 		Args: cobra.NoArgs,
@@ -42,53 +42,54 @@ Para deshacerlo:
 			return applyDefaultProfile(cmd.Context(), app.cfg.Region, false)
 		},
 	}
-	cmd.Flags().BoolVar(&undo, "undo", false, "dejar de ser el perfil por defecto")
+	cmd.Flags().BoolVar(&undo, "undo", false, "stop being the default profile")
 	return cmd
 }
 
-// applyDefaultProfile apunta el perfil por defecto a este binario.
+// applyDefaultProfile points the default profile at this binary.
 func applyDefaultProfile(ctx context.Context, region string, assumeYes bool) error {
 	command := selfCommand()
 
 	if awscreds.IsDefaultProfileOurs(command) {
-		fmt.Fprintf(os.Stderr, "%s ya sos el perfil por defecto en %s\n",
+		fmt.Fprintf(os.Stderr, "%s you are already the default profile in %s\n",
 			mark(true), awscreds.ConfigPath())
 		return nil
 	}
 
-	// Nunca se pisa en silencio: el perfil por defecto puede ser el de trabajo
-	// de alguien, y romperlo sin avisar sería mucho peor que pedir --profile.
+	// Never clobber silently: the default profile may be someone's work
+	// profile, and breaking it without warning would be far worse than having
+	// to pass --profile.
 	if conflict := awscreds.DefaultProfileConflict(command); conflict != "" {
 		fmt.Fprintf(os.Stderr, `
-El perfil por defecto de AWS ya está en uso: %s
+The default AWS profile is already in use: %s
 
-Si lo reemplazo, los comandos de AWS que hoy no llevan --profile pasarían a
-usar el laboratorio.
+If I replace it, the AWS commands that today carry no --profile would start
+using the lab.
 
 `, conflict)
-		ok, err := ui.Confirm(ctx, os.Stdin, "¿Lo reemplazo igual? [s/N]: ", false)
+		ok, err := ui.Confirm(ctx, os.Stdin, "Replace it anyway? [y/N]: ", false)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			fmt.Fprintln(os.Stderr, "No toco nada. Seguí usando --profile academy.")
+			fmt.Fprintln(os.Stderr, "Nothing touched. Keep using --profile academy.")
 			return nil
 		}
 	} else if !assumeYes {
 		fmt.Fprintf(os.Stderr, `
-Puedo apuntar el perfil por defecto de AWS a tu laboratorio, para que no tengas
-que escribir --profile en cada comando.
+I can point the default AWS profile at your lab, so that you do not have to
+type --profile on every command.
 
-Se hace en %s, así que funciona con cualquier shell y en
-cualquier sistema; no toca variables de entorno.
+It is done in %s, so it works with any shell and on any
+system; it does not touch environment variables.
 
 `, awscreds.ConfigPath())
-		ok, err := ui.Confirm(ctx, os.Stdin, "¿Lo configuro? [s/N]: ", false)
+		ok, err := ui.Confirm(ctx, os.Stdin, "Configure it? [y/N]: ", false)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			fmt.Fprintln(os.Stderr, "De acuerdo. Podés hacerlo luego con 'awsacademy default-profile'.")
+			fmt.Fprintln(os.Stderr, "All right. You can do it later with 'awsacademy default-profile'.")
 			return nil
 		}
 	}
@@ -96,9 +97,9 @@ cualquier sistema; no toca variables de entorno.
 	if err := awscreds.ConfigureDefaultProfile(command, region); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s perfil por defecto configurado en %s\n",
+	fmt.Fprintf(os.Stderr, "%s default profile configured in %s\n",
 		mark(true), awscreds.ConfigPath())
-	fmt.Fprintln(os.Stderr, "  Ya podés usar 'aws' sin --profile.")
+	fmt.Fprintln(os.Stderr, "  You can now use 'aws' without --profile.")
 	return nil
 }
 
@@ -108,9 +109,9 @@ func undoDefaultProfile() error {
 		return err
 	}
 	if !removed {
-		fmt.Fprintf(os.Stderr, "%s el perfil por defecto no apuntaba a esta herramienta\n", mark(true))
+		fmt.Fprintf(os.Stderr, "%s the default profile did not point at this tool\n", mark(true))
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "%s ya no sos el perfil por defecto\n", mark(true))
+	fmt.Fprintf(os.Stderr, "%s you are no longer the default profile\n", mark(true))
 	return nil
 }

@@ -6,8 +6,8 @@ import (
 	"sort"
 )
 
-// El jar estándar solo entrega cookies cuando se le pregunta por una URL
-// concreta, así que para poder guardarlo hay que recordar dónde estuvimos.
+// The standard jar only hands cookies over when asked about a specific URL, so
+// in order to save it we have to remember where we have been.
 func (c *Client) rememberOrigin(u *url.URL) {
 	if u == nil {
 		return
@@ -18,12 +18,11 @@ func (c *Client) rememberOrigin(u *url.URL) {
 	c.originsMu.Unlock()
 }
 
-// ExportCookies devuelve las cookies vivas agrupadas por origen, listas para
-// persistir.
+// ExportCookies returns the live cookies grouped by origin, ready to persist.
 //
-// Nota: el jar estándar no expone atributos (Expires, Domain, Path), solo
-// nombre y valor. Al restaurar volvemos a fijarlas en el origen donde las
-// vimos, que es suficiente para revivir una sesión.
+// Note: the standard jar does not expose attributes (Expires, Domain, Path),
+// only name and value. On restore we set them again on the origin where we saw
+// them, which is enough to revive a session.
 func (c *Client) ExportCookies() map[string][]*http.Cookie {
 	c.originsMu.Lock()
 	origins := make([]string, 0, len(c.origins))
@@ -46,7 +45,7 @@ func (c *Client) ExportCookies() map[string][]*http.Cookie {
 	return out
 }
 
-// ImportCookies restaura un jar exportado previamente.
+// ImportCookies restores a previously exported jar.
 func (c *Client) ImportCookies(byOrigin map[string][]*http.Cookie) {
 	for origin, cookies := range byOrigin {
 		u, err := url.Parse(origin)
@@ -58,8 +57,8 @@ func (c *Client) ImportCookies(byOrigin map[string][]*http.Cookie) {
 	}
 }
 
-// Cookie devuelve el valor de una cookie concreta en un origen, o "" si no está.
-// Canvas entrega su token CSRF por esta vía.
+// Cookie returns the value of a specific cookie on an origin, or "" if absent.
+// Canvas delivers its CSRF token this way.
 func (c *Client) Cookie(rawurl, name string) string {
 	u, err := url.Parse(rawurl)
 	if err != nil {

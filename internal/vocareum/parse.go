@@ -1,9 +1,9 @@
-// Package vocareum controla el laboratorio detrás del lanzamiento LTI.
+// Package vocareum controls the lab behind the LTI launch.
 //
-// Vocareum es una aplicación PHP con jQuery: sus botones llaman a endpoints
-// planos bajo /util/*.php, así que se maneja con HTTP normal sin necesidad de
-// un navegador. Su login propio sí tiene reCAPTCHA, pero nunca pasamos por ahí:
-// entramos siempre por el lanzamiento LTI desde Canvas, que no lo atraviesa.
+// Vocareum is a PHP application with jQuery: its buttons call flat endpoints
+// under /util/*.php, so it can be driven with plain HTTP without needing a
+// browser. Its own login does have a reCAPTCHA, but we never go through it: we
+// always come in via the LTI launch from Canvas, which does not cross it.
 package vocareum
 
 import (
@@ -16,23 +16,23 @@ import (
 	"github.com/goslynn/awsacademycli/internal/state"
 )
 
-// El panel "AWS Details" muestra un bloque en formato INI listo para pegar en
-// ~/.aws/credentials. Lo leemos de ahí en vez de intentar reconstruirlo.
+// The "AWS Details" panel shows a block in INI format, ready to paste into
+// ~/.aws/credentials. We read it from there instead of trying to rebuild it.
 var (
 	reAccessKey    = regexp.MustCompile(`(?i)aws_access_key_id\s*=\s*([A-Z0-9]{16,})`)
 	reSecretKey    = regexp.MustCompile(`(?i)aws_secret_access_key\s*=\s*([A-Za-z0-9/+=]{20,})`)
 	reSessionToken = regexp.MustCompile(`(?i)aws_session_token\s*=\s*([A-Za-z0-9/+=]{50,})`)
 )
 
-// ParseCredentials extrae las credenciales STS del bloque que muestra Vocareum.
+// ParseCredentials extracts the STS credentials from the block Vocareum shows.
 //
-// Acepta el texto tal cual, con o sin cabecera de perfil y con cualquier
-// espaciado alrededor del '=', porque el formato exacto varía entre laboratorios.
+// It accepts the text as-is, with or without a profile header and with any
+// spacing around the '=', because the exact format varies between labs.
 func ParseCredentials(text string) (*state.Credentials, error) {
 	find := func(re *regexp.Regexp, what string) (string, error) {
 		m := re.FindStringSubmatch(text)
 		if m == nil {
-			return "", fmt.Errorf("no encontré %s en el panel de AWS Details", what)
+			return "", fmt.Errorf("could not find %s in the AWS Details panel", what)
 		}
 		return strings.TrimSpace(m[1]), nil
 	}
@@ -45,8 +45,8 @@ func ParseCredentials(text string) (*state.Credentials, error) {
 	if err != nil {
 		return nil, err
 	}
-	// El session token es lo que distingue a un laboratorio activo de unas
-	// credenciales permanentes; sin él, algo salió mal en la lectura.
+	// The session token is what tells an active lab apart from permanent
+	// credentials; without it, something went wrong while reading.
 	sessionToken, err := find(reSessionToken, "aws_session_token")
 	if err != nil {
 		return nil, err
@@ -60,11 +60,11 @@ func ParseCredentials(text string) (*state.Credentials, error) {
 	}, nil
 }
 
-// reLabStatus captura la respuesta de a=getawsstatus, que es texto plano:
+// reLabStatus captures the a=getawsstatus response, which is plain text:
 // "Lab status: ready<br>".
 var reLabStatus = regexp.MustCompile(`(?i)lab\s+status\s*:\s*([a-z ]+)`)
 
-// ParseLabStatus interpreta la palabra de estado que devuelve Vocareum.
+// ParseLabStatus interprets the status word Vocareum returns.
 func ParseLabStatus(text string) (LabState, bool) {
 	m := reLabStatus.FindStringSubmatch(text)
 	if m == nil {
@@ -88,12 +88,12 @@ func ParseLabStatus(text string) (LabState, bool) {
 	return StateUnknown, false
 }
 
-// reExpiry captura el instante exacto de expiración, que Vocareum publica como
-// marca de tiempo Unix en un span oculto. Es preferible a deducirla del
-// contador: es la que gobierna de verdad cuándo mueren las credenciales.
+// reExpiry captures the exact expiry instant, which Vocareum publishes as a
+// Unix timestamp in a hidden span. It is preferable to deducing it from the
+// countdown: it is the one that really governs when the credentials die.
 var reExpiry = regexp.MustCompile(`id=["']vlab-expiretime["'][^>]*>\s*(\d{9,})`)
 
-// ParseExpiry devuelve el instante en que expira la sesión del laboratorio.
+// ParseExpiry returns the instant at which the lab session expires.
 func ParseExpiry(text string) (time.Time, bool) {
 	m := reExpiry.FindStringSubmatch(text)
 	if m == nil {
@@ -106,24 +106,25 @@ func ParseExpiry(text string) (time.Time, bool) {
 	return time.Unix(secs, 0), true
 }
 
-// reRemainingLabeled captura el contador con su etiqueta. Importa distinguirlo
-// del "Accumulated lab time", que aparece en la misma página y mide otra cosa.
+// reRemainingLabeled captures the countdown together with its label. Telling it
+// apart from the "Accumulated lab time", which appears on the same page and
+// measures something else, matters.
 var reRemainingLabeled = regexp.MustCompile(`(?i)remaining session time\s*:\s*(\d{1,3}):([0-5]\d):([0-5]\d)`)
 
-// reClock reconoce el contador de sesión: "3:59:30", "03:59", "3h 59m".
+// reClock recognises the session countdown: "3:59:30", "03:59", "3h 59m".
 var (
 	reClockHMS = regexp.MustCompile(`\b(\d{1,2}):([0-5]\d):([0-5]\d)\b`)
 	reClockHM  = regexp.MustCompile(`\b(\d{1,2}):([0-5]\d)\b`)
 	reClockTxt = regexp.MustCompile(`(?i)\b(\d{1,3})\s*h(?:ours?)?\b(?:\s*(\d{1,2})\s*m)?`)
 )
 
-// ParseRemaining interpreta el contador de sesión del laboratorio.
+// ParseRemaining interprets the lab session countdown.
 //
-// Es el número que de verdad importa: dice cuánto falta para que las
-// credenciales mueran y el trabajo sin guardar se pierda.
+// It is the number that really matters: it says how long until the credentials
+// die and unsaved work is lost.
 func ParseRemaining(text string) (time.Duration, bool) {
-	// La forma etiquetada primero: en la página del laboratorio hay varios
-	// relojes y solo uno cuenta lo que queda de sesión.
+	// The labelled form first: there are several clocks on the lab page and
+	// only one counts what is left of the session.
 	if m := reRemainingLabeled.FindStringSubmatch(text); m != nil {
 		h, _ := strconv.Atoi(m[1])
 		min, _ := strconv.Atoi(m[2])
@@ -149,13 +150,13 @@ func ParseRemaining(text string) (time.Duration, bool) {
 	return 0, false
 }
 
-// reBudget reconoce el gasto acumulado: "$12.34 used of $100".
+// reBudget recognises the accumulated spend: "$12.34 used of $100".
 var reBudget = regexp.MustCompile(`\$\s*([0-9]+(?:\.[0-9]+)?)`)
 
-// ParseBudget devuelve el gasto y el tope del laboratorio, en dólares.
+// ParseBudget returns the lab's spend and cap, in dollars.
 //
-// El laboratorio se corta al agotar el presupuesto, así que conviene verlo
-// antes de que pase, no después.
+// The lab is cut off when the budget runs out, so it is worth seeing before it
+// happens, not after.
 func ParseBudget(text string) (used, total float64, ok bool) {
 	m := reBudget.FindAllStringSubmatch(text, 2)
 	if len(m) == 0 {

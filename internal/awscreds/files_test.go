@@ -10,7 +10,7 @@ import (
 	"github.com/goslynn/awsacademycli/internal/state"
 )
 
-// useTempAWSDir apunta las rutas de AWS a un directorio de test.
+// useTempAWSDir points the AWS paths at a test directory.
 func useTempAWSDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -22,28 +22,28 @@ func useTempAWSDir(t *testing.T) string {
 func TestWriteSharedCredentialsPreservesOtherProfiles(t *testing.T) {
 	useTempAWSDir(t)
 
-	// El usuario ya tiene perfiles suyos que no debemos tocar.
+	// The user already has profiles of their own that we must not touch.
 	existing := `[default]
 aws_access_key_id = AKIADEFAULT
 aws_secret_access_key = defaultsecret
 
-[trabajo]
-aws_access_key_id = AKIATRABAJO
-aws_secret_access_key = trabajosecret
+[work]
+aws_access_key_id = AKIAWORK
+aws_secret_access_key = worksecret
 
 [academy]
-aws_access_key_id = ASIAVIEJA
-aws_secret_access_key = viejasecret
-aws_session_token = tokenviejo
+aws_access_key_id = ASIAOLD
+aws_secret_access_key = oldsecret
+aws_session_token = oldtoken
 `
 	if err := os.WriteFile(CredentialsPath(), []byte(existing), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	err := WriteSharedCredentials("academy", &state.Credentials{
-		AccessKeyID:     "ASIANUEVA",
-		SecretAccessKey: "nuevasecret",
-		SessionToken:    "tokennuevo",
+		AccessKeyID:     "ASIANEW",
+		SecretAccessKey: "newsecret",
+		SessionToken:    "newtoken",
 	})
 	if err != nil {
 		t.Fatalf("WriteSharedCredentials: %v", err)
@@ -55,14 +55,14 @@ aws_session_token = tokenviejo
 	}
 	got := string(raw)
 
-	for _, want := range []string{"AKIADEFAULT", "AKIATRABAJO", "trabajosecret", "ASIANUEVA", "tokennuevo"} {
+	for _, want := range []string{"AKIADEFAULT", "AKIAWORK", "worksecret", "ASIANEW", "newtoken"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("falta %q en el fichero resultante:\n%s", want, got)
+			t.Errorf("%q is missing from the resulting file:\n%s", want, got)
 		}
 	}
-	for _, gone := range []string{"ASIAVIEJA", "tokenviejo"} {
+	for _, gone := range []string{"ASIAOLD", "oldtoken"} {
 		if strings.Contains(got, gone) {
-			t.Errorf("%q debería haberse reemplazado:\n%s", gone, got)
+			t.Errorf("%q should have been replaced:\n%s", gone, got)
 		}
 	}
 }
@@ -80,9 +80,9 @@ func TestWriteSharedCredentialsPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Son credenciales: nadie más que el dueño debería poder leerlas.
+	// These are credentials: nobody but the owner should be able to read them.
 	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("permisos = %04o, esperaba 0600", perm)
+		t.Errorf("permissions = %04o, expected 0600", perm)
 	}
 }
 
@@ -93,7 +93,7 @@ func TestRemoveSharedCredentialsForCredentialProcess(t *testing.T) {
 aws_access_key_id = AKIADEFAULT
 
 [academy]
-aws_access_key_id = ASIAVIEJA
+aws_access_key_id = ASIAOLD
 aws_secret_access_key = s
 aws_session_token = t
 `
@@ -102,20 +102,20 @@ aws_session_token = t
 	}
 
 	if !HasStaticCredentials("academy") {
-		t.Fatal("HasStaticCredentials debería detectar el bloque estático")
+		t.Fatal("HasStaticCredentials should detect the static block")
 	}
 	if err := RemoveSharedCredentials("academy"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Las claves estáticas ganan sobre credential_process, así que tienen que
-	// desaparecer del todo para que el proveedor sirva de algo.
+	// The static keys win over credential_process, so they have to disappear
+	// entirely for the provider to be of any use.
 	if HasStaticCredentials("academy") {
-		t.Error("el perfil academy debería haber desaparecido")
+		t.Error("the academy profile should be gone")
 	}
 	raw, _ := os.ReadFile(CredentialsPath())
 	if !strings.Contains(string(raw), "AKIADEFAULT") {
-		t.Errorf("el perfil default no debería haberse tocado:\n%s", raw)
+		t.Errorf("the default profile should not have been touched:\n%s", raw)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestConfigureCredentialProcessKeepsExistingSettings(t *testing.T) {
 region = sa-east-1
 output = json
 
-[profile otro]
+[profile other]
 region = eu-west-1
 `
 	if err := os.WriteFile(ConfigPath(), []byte(existing), 0o644); err != nil {
@@ -140,13 +140,13 @@ region = eu-west-1
 	if got := CredentialProcessCommand("academy"); got != "/usr/bin/awsacademy creds" {
 		t.Errorf("credential_process = %q", got)
 	}
-	// No pisamos la region que el usuario eligió a mano.
+	// We do not clobber the region the user chose by hand.
 	if got := ProfileRegion("academy"); got != "sa-east-1" {
-		t.Errorf("region = %q, esperaba sa-east-1 (la del usuario)", got)
+		t.Errorf("region = %q, expected sa-east-1 (the user's)", got)
 	}
 	raw, _ := os.ReadFile(ConfigPath())
 	if !strings.Contains(string(raw), "eu-west-1") {
-		t.Errorf("el perfil 'otro' debería seguir intacto:\n%s", raw)
+		t.Errorf("the 'other' profile should still be intact:\n%s", raw)
 	}
 }
 
@@ -162,7 +162,7 @@ func TestProcessOutputFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(raw)
-	// El CLI exige Version 1 y estas claves exactas, en CamelCase.
+	// The CLI demands Version 1 and these exact keys, in CamelCase.
 	for _, want := range []string{
 		`"Version":1`,
 		`"AccessKeyId":"ASIA123"`,
@@ -171,7 +171,7 @@ func TestProcessOutputFormat(t *testing.T) {
 		`"Expiration":"2026-08-25T18:30:00Z"`,
 	} {
 		if !strings.Contains(got, want) {
-			t.Errorf("falta %s en %s", want, got)
+			t.Errorf("%s is missing from %s", want, got)
 		}
 	}
 }
@@ -183,17 +183,17 @@ func TestCredentialsExpiry(t *testing.T) {
 		want bool
 	}{
 		{"nil", nil, true},
-		{"vacías", &state.Credentials{}, true},
-		{"vencidas", &state.Credentials{AccessKeyID: "A", Expiration: time.Now().Add(-time.Hour)}, true},
-		// Margen: no entregamos credenciales que mueren en pleno request.
-		{"por vencer", &state.Credentials{AccessKeyID: "A", Expiration: time.Now().Add(30 * time.Second)}, true},
-		{"vigentes", &state.Credentials{AccessKeyID: "A", Expiration: time.Now().Add(2 * time.Hour)}, false},
-		{"sin expiración conocida", &state.Credentials{AccessKeyID: "A"}, false},
+		{"empty", &state.Credentials{}, true},
+		{"expired", &state.Credentials{AccessKeyID: "A", Expiration: time.Now().Add(-time.Hour)}, true},
+		// Margin: we do not hand out credentials that die mid-request.
+		{"about to expire", &state.Credentials{AccessKeyID: "A", Expiration: time.Now().Add(30 * time.Second)}, true},
+		{"valid", &state.Credentials{AccessKeyID: "A", Expiration: time.Now().Add(2 * time.Hour)}, false},
+		{"expiry unknown", &state.Credentials{AccessKeyID: "A"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.c.Expired(); got != tt.want {
-				t.Errorf("Expired() = %v, esperaba %v", got, tt.want)
+				t.Errorf("Expired() = %v, expected %v", got, tt.want)
 			}
 		})
 	}

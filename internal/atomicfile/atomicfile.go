@@ -1,9 +1,9 @@
-// Package atomicfile escribe ficheros de forma atómica.
+// Package atomicfile writes files atomically.
 //
-// Los ficheros de estado se reescriben en cada operación; un escritor
-// interrumpido a mitad de camino dejaría credenciales o cookies truncadas, y
-// el siguiente arranque fallaría al parsearlas. Escribir a un temporal en el
-// mismo directorio y renombrar evita ese estado intermedio.
+// The state files are rewritten on every operation; a writer interrupted
+// halfway through would leave truncated credentials or cookies, and the next
+// run would fail to parse them. Writing to a temporary file in the same
+// directory and renaming avoids that intermediate state.
 package atomicfile
 
 import (
@@ -11,7 +11,8 @@ import (
 	"path/filepath"
 )
 
-// Write vuelca data en path con los permisos dados, sin estados intermedios visibles.
+// Write dumps data into path with the given permissions, with no visible
+// intermediate states.
 func Write(path string, data []byte, perm os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err

@@ -11,16 +11,16 @@ import (
 	"golang.org/x/term"
 )
 
-// Las lecturas de stdin son bloqueantes y no atienden a la cancelación del
-// contexto, así que cada una se hace en su propia goroutine y se compite contra
-// ctx.Done(). Sin esto, un Ctrl+C durante una pregunta no haría nada: el
-// programa instala su propio manejador de SIGINT —lo que desactiva la
-// terminación por defecto— y se quedaría esperando una línea para siempre.
+// Reads from stdin block and do not honour context cancellation, so each one
+// runs in its own goroutine and races against ctx.Done(). Without this, a
+// Ctrl+C during a question would do nothing: the program installs its own
+// SIGINT handler — which disables the default termination — and would wait for
+// a line forever.
 //
-// La goroutine que quedó leyendo se abandona a propósito: cancelar significa
-// terminar, así que nadie va a volver a usar esa entrada.
+// The goroutine left reading is abandoned on purpose: cancelling means
+// finishing, so nobody is going to use that input again.
 
-// Prompt pide una línea de texto, respetando la cancelación.
+// Prompt asks for a line of text, honouring cancellation.
 func Prompt(ctx Context, in io.Reader, label string) (string, error) {
 	fmt.Fprint(os.Stderr, label)
 
@@ -41,7 +41,7 @@ func Prompt(ctx Context, in io.Reader, label string) (string, error) {
 	case r := <-ch:
 		if r.err != nil && r.line == "" {
 			if errors.Is(r.err, io.EOF) {
-				// Ctrl+D en una pregunta es abandonar, no un fallo.
+				// Ctrl+D at a question means giving up, not a failure.
 				fmt.Fprintln(os.Stderr)
 				return "", ErrCancelled
 			}
@@ -51,7 +51,7 @@ func Prompt(ctx Context, in io.Reader, label string) (string, error) {
 	}
 }
 
-// PromptPassword pide una contraseña sin eco, respetando la cancelación.
+// PromptPassword asks for a password without echo, honouring cancellation.
 func PromptPassword(ctx Context, label string) (string, error) {
 	fmt.Fprint(os.Stderr, label)
 
@@ -61,8 +61,8 @@ func PromptPassword(ctx Context, label string) (string, error) {
 		return Prompt(ctx, os.Stdin, "")
 	}
 
-	// Se guarda el estado para poder devolver el eco si cancelamos: dejar el
-	// terminal mudo al salir obligaría a la persona a ejecutar `reset`.
+	// The state is saved so echo can be restored if we cancel: leaving the
+	// terminal mute on exit would force the person to run `reset`.
 	state, err := term.GetState(fd)
 	if err != nil {
 		return "", err
@@ -92,8 +92,8 @@ func PromptPassword(ctx Context, label string) (string, error) {
 	}
 }
 
-// Confirm hace una pregunta de sí o no. defaultYes decide qué significa un
-// enter vacío.
+// Confirm asks a yes-or-no question. defaultYes decides what an empty enter
+// means.
 func Confirm(ctx Context, in io.Reader, label string, defaultYes bool) (bool, error) {
 	answer, err := Prompt(ctx, in, label)
 	if err != nil {
@@ -102,15 +102,15 @@ func Confirm(ctx Context, in io.Reader, label string, defaultYes bool) (bool, er
 	switch strings.ToLower(answer) {
 	case "":
 		return defaultYes, nil
-	case "s", "si", "sí", "y", "yes":
+	case "y", "yes":
 		return true, nil
 	default:
 		return false, nil
 	}
 }
 
-// Context es lo único que necesitamos de context.Context. Declararlo así
-// mantiene el paquete centrado en la terminal y hace triviales los tests.
+// Context is the only thing we need from context.Context. Declaring it this way
+// keeps the package focused on the terminal and makes tests trivial.
 type Context interface {
 	Done() <-chan struct{}
 }

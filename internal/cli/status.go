@@ -15,15 +15,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ok indica si todo está en orden: sesión viva, laboratorio corriendo y
-// credenciales que funcionan. Es lo que gobierna el código de salida, para
-// poder escribir `awsacademy status --json >/dev/null || awsacademy start`.
+// ok reports whether everything is in order: live session, running lab and
+// working credentials. It governs the exit code, so that one can write
+// `awsacademy status --json >/dev/null || awsacademy start`.
 func (r *statusReport) ok() bool {
 	return r.Auth.Authenticated && r.Lab.State == string(vocareum.StateRunning) && r.AWS.Valid
 }
 
-// statusReport es lo que informa `status`, en las tres capas que pueden fallar
-// por separado: la sesión, el laboratorio y las credenciales de AWS.
+// statusReport is what `status` reports, across the three layers that can fail
+// independently: the session, the lab and the AWS credentials.
 type statusReport struct {
 	Auth struct {
 		Authenticated bool   `json:"authenticated"`
@@ -33,8 +33,8 @@ type statusReport struct {
 
 	Lab struct {
 		State string `json:"state"`
-		// RemainingSeconds es lo que queda de sesión: el número que decide si
-		// conviene empezar algo largo ahora o levantar el laboratorio de nuevo.
+		// RemainingSeconds is what is left of the session: the number that
+		// decides whether to start something long now or bring the lab up again.
 		RemainingSeconds int     `json:"remaining_seconds,omitempty"`
 		Remaining        string  `json:"remaining,omitempty"`
 		BudgetUsed       float64 `json:"budget_used,omitempty"`
@@ -45,8 +45,8 @@ type statusReport struct {
 
 	AWS struct {
 		Profile string `json:"profile"`
-		// Source dice de dónde saldrían las credenciales: del fichero
-		// compartido o de este binario vía credential_process.
+		// Source says where the credentials would come from: the shared file
+		// or this binary via credential_process.
 		Source  string `json:"source"`
 		Valid   bool   `json:"valid"`
 		ARN     string `json:"arn,omitempty"`
@@ -58,15 +58,15 @@ type statusReport struct {
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Muestra el estado de la sesión, del laboratorio y de las credenciales",
-		Long: `Informa las tres cosas que pueden estar mal, por separado:
+		Short: "Show the state of the session, the lab and the credentials",
+		Long: `Reports the three things that can be wrong, separately:
 
-  auth   si la sesión de AWS Academy sigue viva
-  lab    si el laboratorio está levantado y cuánto tiempo de sesión queda
-  aws    si el perfil de AWS CLI tiene credenciales que de verdad funcionan,
-         comprobado contra sts:GetCallerIdentity
+  auth   whether the AWS Academy session is still alive
+  lab    whether the lab is up and how much session time is left
+  aws    whether the AWS CLI profile has credentials that really work,
+         checked against sts:GetCallerIdentity
 
-Sale con código 0 solo si las tres están bien, así que se puede encadenar:
+It exits with code 0 only if all three are fine, so it can be chained:
 
   awsacademy status --json >/dev/null || awsacademy start`,
 		Args: cobra.NoArgs,
@@ -80,8 +80,8 @@ Sale con código 0 solo si las tres están bien, así que se puede encadenar:
 				printStatus(report)
 			}
 			if !report.ok() {
-				// El detalle ya se imprimió; un error extra solo repetiría
-				// lo mismo, pero el código de salida tiene que reflejarlo.
+				// The detail was already printed; an extra error would only
+				// repeat it, but the exit code has to reflect it.
 				return errQuiet
 			}
 			return nil
@@ -89,21 +89,22 @@ Sale con código 0 solo si las tres están bien, así que se puede encadenar:
 	}
 }
 
-// collectStatus reúne el informe sin abortar al primer fallo: que la sesión
-// esté caída no impide decir qué pasa con las credenciales de AWS, y ver las
-// tres capas juntas es justamente lo que permite diagnosticar.
+// collectStatus gathers the report without aborting on the first failure: a
+// dead session does not stop us from saying what is going on with the AWS
+// credentials, and seeing the three layers together is exactly what makes
+// diagnosis possible.
 func collectStatus(ctx context.Context) *statusReport {
 	r := &statusReport{}
 	r.Lab.State = string(vocareum.StateUnknown)
 
 	app, err := newApp(flagDebugHTTP)
 	if err != nil {
-		// Sin configuración no se puede decir nada de las otras dos capas;
-		// decirlo es más útil que dejarlas en blanco.
+		// Without configuration nothing can be said about the other two
+		// layers; saying so is more useful than leaving them blank.
 		r.Auth.Error = err.Error()
-		r.Lab.Error = "sin configuración"
+		r.Lab.Error = "not configured"
 		r.AWS.Profile = "?"
-		r.AWS.Error = "sin configuración"
+		r.AWS.Error = "not configured"
 		return r
 	}
 	r.AWS.Profile = app.cfg.AWSProfile
@@ -114,7 +115,7 @@ func collectStatus(ctx context.Context) *statusReport {
 		r.Auth.Authenticated = true
 		r.Auth.User = user.Name
 	case errors.Is(err, canvas.ErrInvalidCredentials):
-		r.Auth.Error = "credenciales rechazadas por AWS Academy"
+		r.Auth.Error = "credentials rejected by AWS Academy"
 	default:
 		r.Auth.Error = err.Error()
 	}
@@ -122,7 +123,7 @@ func collectStatus(ctx context.Context) *statusReport {
 	if r.Auth.Authenticated {
 		collectLabStatus(ctx, app, r)
 	} else {
-		r.Lab.Error = "sin sesión"
+		r.Lab.Error = "no session"
 	}
 
 	collectAWSStatus(ctx, app, r)
@@ -142,8 +143,8 @@ func collectLabStatus(ctx context.Context, app *App, r *statusReport) {
 		r.Lab.Error = err.Error()
 		return
 	}
-	// El contador no viaja en la respuesta de estado, solo junto a las
-	// credenciales, así que se pide únicamente cuando hay algo que contar.
+	// The countdown does not travel in the status response, only alongside the
+	// credentials, so it is requested only when there is something to count.
 	if st.Running() {
 		if detail, _, err := lab.Details(ctx); err == nil {
 			st = detail
@@ -161,13 +162,13 @@ func collectLabStatus(ctx context.Context, app *App, r *statusReport) {
 func collectAWSStatus(ctx context.Context, app *App, r *statusReport) {
 	profile := r.AWS.Profile
 	if profile == "?" {
-		r.AWS.Error = "sin configuración"
+		r.AWS.Error = "not configured"
 		return
 	}
 
-	// Se valida la fuente que el AWS CLI usaría de verdad. Con
-	// credential_process activo, eso es la caché de este binario; con el modo
-	// clásico, lo que haya escrito en ~/.aws/credentials.
+	// We validate the source the AWS CLI would actually use. With
+	// credential_process active, that is this binary's cache; in classic mode,
+	// whatever is written in ~/.aws/credentials.
 	var creds *state.Credentials
 	var err error
 	if awscreds.CredentialProcessCommand(profile) != "" && !awscreds.HasStaticCredentials(profile) {
@@ -178,11 +179,11 @@ func collectAWSStatus(ctx context.Context, app *App, r *statusReport) {
 		creds, err = awscreds.ReadSharedCredentials(profile)
 	}
 	if err != nil {
-		r.AWS.Error = fmt.Sprintf("sin credenciales para el perfil %q", profile)
+		r.AWS.Error = fmt.Sprintf("no credentials for profile %q", profile)
 		return
 	}
 	if creds.Expired() {
-		r.AWS.Error = "las credenciales guardadas ya expiraron"
+		r.AWS.Error = "the saved credentials have already expired"
 		return
 	}
 
@@ -203,12 +204,12 @@ func collectAWSStatus(ctx context.Context, app *App, r *statusReport) {
 func printStatus(r *statusReport) {
 	fmt.Println("AUTH")
 	if r.Auth.Authenticated {
-		fmt.Printf("  %s sesión viva como %s\n", mark(true), r.Auth.User)
+		fmt.Printf("  %s session alive as %s\n", mark(true), r.Auth.User)
 	} else {
 		fmt.Printf("  %s %s\n", mark(false), r.Auth.Error)
 	}
 
-	fmt.Println("\nLABORATORIO")
+	fmt.Println("\nLAB")
 	switch {
 	case r.Lab.Error != "":
 		fmt.Printf("  %s %s\n", mark(false), r.Lab.Error)
@@ -216,25 +217,25 @@ func printStatus(r *statusReport) {
 		running := r.Lab.State == string(vocareum.StateRunning)
 		fmt.Printf("  %s %s\n", mark(running), r.Lab.State)
 		if r.Lab.Course != "" {
-			fmt.Printf("    curso        %s\n", r.Lab.Course)
+			fmt.Printf("    course       %s\n", r.Lab.Course)
 		}
 		if r.Lab.Remaining != "" {
-			fmt.Printf("    queda        %s de sesión\n", r.Lab.Remaining)
+			fmt.Printf("    remaining    %s of session\n", r.Lab.Remaining)
 		}
 		if r.Lab.BudgetTotal > 0 {
-			fmt.Printf("    presupuesto  $%.2f de $%.2f\n", r.Lab.BudgetUsed, r.Lab.BudgetTotal)
+			fmt.Printf("    budget       $%.2f of $%.2f\n", r.Lab.BudgetUsed, r.Lab.BudgetTotal)
 		}
 	}
 
 	fmt.Println("\nAWS CLI")
-	fmt.Printf("    perfil       %s\n", r.AWS.Profile)
+	fmt.Printf("    profile      %s\n", r.AWS.Profile)
 	if r.AWS.Source != "" {
-		fmt.Printf("    origen       %s\n", r.AWS.Source)
+		fmt.Printf("    source       %s\n", r.AWS.Source)
 	}
 	if r.AWS.Valid {
-		fmt.Printf("  %s credenciales válidas\n", mark(true))
+		fmt.Printf("  %s valid credentials\n", mark(true))
 		fmt.Printf("    arn          %s\n", r.AWS.ARN)
-		fmt.Printf("    cuenta       %s\n", r.AWS.Account)
+		fmt.Printf("    account      %s\n", r.AWS.Account)
 	} else {
 		fmt.Printf("  %s %s\n", mark(false), r.AWS.Error)
 	}
@@ -247,7 +248,7 @@ func mark(ok bool) string {
 	return "✗"
 }
 
-// printJSON escribe una estructura como JSON indentado en stdout.
+// printJSON writes a structure as indented JSON on stdout.
 func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

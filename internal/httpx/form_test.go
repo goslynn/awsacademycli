@@ -31,8 +31,8 @@ func TestFindAutoSubmitForm(t *testing.T) {
 		wantValue  string
 	}{
 		{
-			// LTI 1.1: form firmado con OAuth1 y un script que lo dispara.
-			name: "lanzamiento LTI 1.1",
+			// LTI 1.1: a form signed with OAuth1 and a script that fires it.
+			name: "LTI 1.1 launch",
 			body: `<html><body>
 				<form action="https://labs.vocareum.com/lti/launch" method="POST" name="ltiLaunchForm">
 					<input type="hidden" name="oauth_consumer_key" value="abc123"/>
@@ -48,8 +48,8 @@ func TestFindAutoSubmitForm(t *testing.T) {
 			wantValue:  "deadbeef",
 		},
 		{
-			// LTI 1.3: el id_token viaja igual, en un form auto-enviado.
-			name: "lanzamiento LTI 1.3 con body onload",
+			// LTI 1.3: the id_token travels the same way, in a self-submitting form.
+			name: "LTI 1.3 launch with body onload",
 			body: `<html><body onload="document.forms[0].submit()">
 				<form action="/lti/callback" method="POST">
 					<input type="hidden" name="id_token" value="ey.jwt.here"/>
@@ -63,9 +63,9 @@ func TestFindAutoSubmitForm(t *testing.T) {
 			wantValue:  "ey.jwt.here",
 		},
 		{
-			// Un form sin disparador es un form que el usuario debe completar.
-			// Reenviarlo vacío rompería el login, así que no se toca.
-			name: "form de login no se auto-envía",
+			// A form with no trigger is a form the user is meant to fill in.
+			// Resubmitting it empty would break the login, so it is left alone.
+			name: "the login form is not auto-submitted",
 			body: `<html><body>
 				<form action="/login/canvas" method="POST">
 					<input type="hidden" name="authenticity_token" value="tok"/>
@@ -76,14 +76,14 @@ func TestFindAutoSubmitForm(t *testing.T) {
 			wantForm: false,
 		},
 		{
-			name:     "página sin formularios",
+			name:     "page with no forms",
 			body:     `<html><body><h1>Learner Lab</h1></body></html>`,
 			wantForm: false,
 		},
 		{
-			// El disparador existe pero apunta a un form; con varios,
-			// gana el que lleva campos ocultos.
-			name: "elige el form con campos ocultos",
+			// The trigger exists and points at a form; with several of them,
+			// the one carrying hidden fields wins.
+			name: "picks the form with hidden fields",
 			body: `<html><body>
 				<form action="/search" method="GET"><input type="text" name="q"/></form>
 				<form action="/lti" method="POST"><input type="hidden" name="payload" value="p"/></form>
@@ -105,21 +105,21 @@ func TestFindAutoSubmitForm(t *testing.T) {
 			}
 			if !tt.wantForm {
 				if form != nil {
-					t.Fatalf("esperaba nil, obtuve action=%q", form.Action)
+					t.Fatalf("expected nil, got action=%q", form.Action)
 				}
 				return
 			}
 			if form == nil {
-				t.Fatal("esperaba un formulario, obtuve nil")
+				t.Fatal("expected a form, got nil")
 			}
 			if form.Action != tt.wantAction {
-				t.Errorf("Action = %q, esperaba %q", form.Action, tt.wantAction)
+				t.Errorf("Action = %q, expected %q", form.Action, tt.wantAction)
 			}
 			if form.Method != tt.wantMethod {
-				t.Errorf("Method = %q, esperaba %q", form.Method, tt.wantMethod)
+				t.Errorf("Method = %q, expected %q", form.Method, tt.wantMethod)
 			}
 			if got := form.Values.Get(tt.wantField); got != tt.wantValue {
-				t.Errorf("Values[%q] = %q, esperaba %q", tt.wantField, got, tt.wantValue)
+				t.Errorf("Values[%q] = %q, expected %q", tt.wantField, got, tt.wantValue)
 			}
 		})
 	}
@@ -128,8 +128,8 @@ func TestFindAutoSubmitForm(t *testing.T) {
 func TestParseFormSkipsUncheckedBoxes(t *testing.T) {
 	resp := mkResp(t, `<html><body>
 		<form action="/x" method="POST">
-			<input type="checkbox" name="marcado" value="1" checked/>
-			<input type="checkbox" name="sinmarcar" value="1"/>
+			<input type="checkbox" name="checked_box" value="1" checked/>
+			<input type="checkbox" name="unchecked_box" value="1"/>
 			<input type="hidden" name="h" value="v"/>
 		</form>
 	</body></html>`)
@@ -138,10 +138,10 @@ func TestParseFormSkipsUncheckedBoxes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if form.Values.Get("marcado") != "1" {
-		t.Error("el checkbox marcado debería enviarse")
+	if form.Values.Get("checked_box") != "1" {
+		t.Error("the checked checkbox should be submitted")
 	}
-	if form.Values.Has("sinmarcar") {
-		t.Error("el checkbox sin marcar no debería enviarse")
+	if form.Values.Has("unchecked_box") {
+		t.Error("the unchecked checkbox should not be submitted")
 	}
 }

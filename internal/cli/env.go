@@ -12,21 +12,20 @@ func newEnvCmd() *cobra.Command {
 	var unset bool
 	cmd := &cobra.Command{
 		Use:   "env",
-		Short: "Imprime la orden que fija AWS_PROFILE en la sesión actual",
-		Long: `Escribe en stdout la orden que exporta AWS_PROFILE, para evaluarla:
+		Short: "Print the command that sets AWS_PROFILE in the current session",
+		Long: `Writes on stdout the command that exports AWS_PROFILE, so it can be evaluated:
 
   eval "$(awsacademy env)"
 
-Un programa no puede modificar las variables de su shell padre, así que la
-exportación tiene que ejecutarla el propio shell. Esto afecta solo a la sesión
-en curso.
+A program cannot modify the variables of its parent shell, so the export has to
+be run by the shell itself. This affects only the current session.
 
-Para no escribir --profile de forma permanente, es preferible:
+To avoid typing --profile permanently, prefer:
 
   awsacademy default-profile
 
-que lo resuelve en la configuración de AWS y por tanto funciona con cualquier
-shell y en cualquier sistema, sin variables de entorno.`,
+which resolves it in the AWS configuration and therefore works with any shell
+and on any system, without environment variables.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if unset {
@@ -41,12 +40,12 @@ shell y en cualquier sistema, sin variables de entorno.`,
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&unset, "unset", false, "imprimir la orden que quita la variable")
+	cmd.Flags().BoolVar(&unset, "unset", false, "print the command that removes the variable")
 	return cmd
 }
 
-// detectShell mira $SHELL para elegir la sintaxis. fish es el único de uso
-// común que no entiende `export VAR=valor`.
+// detectShell looks at $SHELL to choose the syntax. fish is the only one in
+// common use that does not understand `export VAR=value`.
 func detectShell() string {
 	if strings.Contains(os.Getenv("SHELL"), "fish") {
 		return "fish"

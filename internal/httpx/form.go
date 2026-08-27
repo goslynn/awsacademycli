@@ -11,14 +11,14 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// Form es un formulario HTML listo para reenviar.
+// Form is an HTML form ready to be resubmitted.
 type Form struct {
 	Action string
 	Method string
 	Values url.Values
 }
 
-// request materializa el formulario como un http.Request.
+// request materialises the form as an http.Request.
 func (f *Form) request(ctx context.Context) (*http.Request, error) {
 	if strings.EqualFold(f.Method, http.MethodGet) {
 		target, err := url.Parse(f.Action)
@@ -36,7 +36,7 @@ func (f *Form) request(ctx context.Context) (*http.Request, error) {
 	return req, nil
 }
 
-// Submit envía un formulario y sigue la cadena que se abra a partir de él.
+// Submit sends a form and follows whatever chain opens up from it.
 func (c *Client) Submit(ctx context.Context, form *Form) (*Response, error) {
 	req, err := form.request(ctx)
 	if err != nil {
@@ -45,17 +45,17 @@ func (c *Client) Submit(ctx context.Context, form *Form) (*Response, error) {
 	return c.Navigate(ctx, req)
 }
 
-// submitCall detecta las formas habituales de auto-enviar un formulario:
+// submitCall detects the usual ways of auto-submitting a form:
 // document.forms[0].submit(), document.ltiLaunchForm.submit(),
 // $('#form').submit(), getElementById('x').submit()...
 var submitCall = regexp.MustCompile(`\.submit\s*\(\s*\)`)
 
-// findAutoSubmitForm devuelve el formulario que la página se enviaría a sí
-// misma mediante JavaScript, o nil si la página es un destino real.
+// findAutoSubmitForm returns the form the page would submit to itself through
+// JavaScript, or nil if the page is a real destination.
 //
-// Esta es la única "ejecución de JavaScript" que necesitamos: las páginas
-// intermedias de un lanzamiento LTI no tienen contenido, solo un formulario con
-// campos ocultos firmados y un script que lo envía en cuanto carga.
+// This is the only "JavaScript execution" we need: the intermediate pages of an
+// LTI launch have no content, only a form with signed hidden fields and a
+// script that submits it as soon as it loads.
 func findAutoSubmitForm(resp *Response) (*Form, error) {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(resp.Body))
 	if err != nil {
@@ -67,24 +67,24 @@ func findAutoSubmitForm(resp *Response) (*Form, error) {
 		return nil, nil
 	}
 
-	// Una página puente no tiene contenido: existe solo para reenviar el
-	// formulario. Una aplicación de verdad sí lo tiene, y también puede llamar
-	// a .submit() desde algún manejador que nunca se dispara al cargar.
-	// Enviar ese formulario nos sacaría de la página que buscábamos, así que la
-	// ausencia de contenido es la señal decisiva, más que el propio .submit().
+	// A bridge page has no content: it exists only to resubmit the form. A real
+	// application does have content, and it may also call .submit() from some
+	// handler that never fires on load. Submitting that form would take us away
+	// from the page we were after, so the absence of content is the decisive
+	// signal, more so than the .submit() itself.
 	if visibleTextLen(doc) > maxBridgePageText {
 		return nil, nil
 	}
 
-	// Y algo tiene que enviarlo solo: sin esa señal, un formulario es un
-	// formulario que el usuario debería completar —el login, por ejemplo— y
-	// reenviarlo vacío sería un error.
+	// And something has to submit it on its own: without that signal, a form is
+	// a form the user is meant to fill in — the login, for instance — and
+	// resubmitting it empty would be a mistake.
 	if !hasSubmitTrigger(doc) {
 		return nil, nil
 	}
 
-	// Con varios formularios elegimos el primero que tenga campos ocultos: es
-	// el patrón de LTI, donde el payload firmado viaja en inputs hidden.
+	// With several forms we pick the first one that has hidden fields: that is
+	// the LTI pattern, where the signed payload travels in hidden inputs.
 	var chosen *goquery.Selection
 	forms.EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		if s.Find(`input[type="hidden"]`).Length() > 0 {
@@ -100,11 +100,11 @@ func findAutoSubmitForm(resp *Response) (*Form, error) {
 	return parseForm(chosen, resp.URL)
 }
 
-// maxBridgePageText es cuánto texto visible puede tener una página que solo
-// sirve de puente. Las de un lanzamiento LTI muestran a lo sumo un "espere…".
+// maxBridgePageText is how much visible text a page that merely serves as a
+// bridge may have. The ones in an LTI launch show a "please wait…" at most.
 const maxBridgePageText = 400
 
-// visibleTextLen mide el texto que la página le muestra a una persona.
+// visibleTextLen measures the text the page shows to a person.
 func visibleTextLen(doc *goquery.Document) int {
 	body := doc.Find("body").Clone()
 	body.Find("script, style, noscript, template").Remove()
@@ -129,7 +129,7 @@ func hasSubmitTrigger(doc *goquery.Document) bool {
 	return false
 }
 
-// parseForm extrae action, método y campos de un formulario.
+// parseForm extracts the action, the method and the fields of a form.
 func parseForm(form *goquery.Selection, base *url.URL) (*Form, error) {
 	action, _ := form.Attr("action")
 	target := base
@@ -152,7 +152,7 @@ func parseForm(form *goquery.Selection, base *url.URL) (*Form, error) {
 		if !ok || name == "" {
 			return
 		}
-		// Los checkboxes y radios sin marcar no se envían.
+		// Unchecked checkboxes and radios are not submitted.
 		if t, _ := s.Attr("type"); t == "checkbox" || t == "radio" {
 			if _, checked := s.Attr("checked"); !checked {
 				return
@@ -172,8 +172,8 @@ func parseForm(form *goquery.Selection, base *url.URL) (*Form, error) {
 	return &Form{Action: target.String(), Method: strings.ToUpper(method), Values: values}, nil
 }
 
-// FindForm localiza un formulario por selector CSS y lo devuelve con sus campos
-// precargados. Sirve para completar formularios reales, como el login.
+// FindForm locates a form by CSS selector and returns it with its fields
+// preloaded. It serves to fill in real forms, such as the login.
 func (r *Response) FindForm(selector string) (*Form, error) {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(r.Body))
 	if err != nil {
@@ -186,7 +186,7 @@ func (r *Response) FindForm(selector string) (*Form, error) {
 	return parseForm(sel, r.URL)
 }
 
-// Document parsea el cuerpo como HTML para consultarlo con selectores.
+// Document parses the body as HTML so it can be queried with selectors.
 func (r *Response) Document() (*goquery.Document, error) {
 	return goquery.NewDocumentFromReader(bytes.NewReader(r.Body))
 }

@@ -16,11 +16,11 @@ import (
 	"github.com/goslynn/awsacademycli/internal/state"
 )
 
-// fakeAcademy simula el recorrido completo: el login de Canvas, su API, el
-// lanzamiento LTI a través del iframe y el laboratorio del otro lado.
+// fakeAcademy simulates the complete round trip: the Canvas login, its API, the
+// LTI launch through the iframe and the lab on the other side.
 //
-// El objetivo es ejercitar la cadena entera —incluido el auto-submit del
-// formulario firmado— sin tocar el servicio real.
+// The goal is to exercise the whole chain — including the auto-submit of the
+// signed form — without touching the real service.
 type fakeAcademy struct {
 	canvas   *httptest.Server
 	provider *httptest.Server
@@ -31,33 +31,33 @@ func newFakeAcademy(t *testing.T) *fakeAcademy {
 	t.Helper()
 	f := &fakeAcademy{}
 
-	// --- El proveedor LTI, al otro lado del lanzamiento ---
+	// --- The LTI provider, on the far side of the launch ---
 	provider := http.NewServeMux()
 	provider.HandleFunc("/lti/launch", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "el lanzamiento LTI debe ser POST", http.StatusMethodNotAllowed)
+			http.Error(w, "the LTI launch must be a POST", http.StatusMethodNotAllowed)
 			return
 		}
 		r.ParseForm()
-		// El payload firmado tiene que haber viajado en el auto-submit.
+		// The signed payload must have travelled in the auto-submit.
 		if r.Form.Get("oauth_signature") == "" {
-			http.Error(w, "falta la firma OAuth", http.StatusBadRequest)
+			http.Error(w, "the OAuth signature is missing", http.StatusBadRequest)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{Name: "vocsession", Value: "abc", Path: "/"})
 		w.Header().Set("Content-Type", "text/html")
-		// El trampolín: Vocareum no sirve el panel directamente.
+		// The bounce page: Vocareum does not serve the panel directly.
 		fmt.Fprintf(w, `<html><body><script>
 			callPostIfCookiesDisabled("../main/main.php?m=clabide&stepid=5679250", "tok");
 			</script></body></html>`)
 	})
-	// El panel real, al final del trampolín. Sus botones son los que revelan
-	// la API: las URLs llevan el stepid de la sesión, así que hay que leerlas
-	// de aquí y no inventarlas.
+	// The real panel, at the end of the bounce. Its buttons are what reveal the
+	// API: the URLs carry the session's stepid, so they have to be read from
+	// here and not made up.
 	provider.HandleFunc("/main/main.php", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<html><body>
-			<div id="labcontrol">Consola del laboratorio</div>
+			<div id="labcontrol">Lab console</div>
 			<script>
 			function startLab(){ vcAjax("../util/vcput.php?a=startaws&stepid=5679250&version=0&mode=s&type=1"); }
 			function endLab(){ vcAjax("../util/vcput.php?a=endaws&stepid=5679250&version=0&mode=s&type=1"); }
@@ -68,7 +68,7 @@ func newFakeAcademy(t *testing.T) *fakeAcademy {
 	})
 
 	provider.HandleFunc("/util/vcput.php", func(w http.ResponseWriter, r *http.Request) {
-		// Vocareum atiende todo por vcput.php y distingue con a=.
+		// Vocareum serves everything through vcput.php and distinguishes with a=.
 		switch r.URL.Query().Get("a") {
 		case "startaws":
 			f.labOn = true
@@ -77,7 +77,7 @@ func newFakeAcademy(t *testing.T) *fakeAcademy {
 			f.labOn = false
 			fmt.Fprint(w, "OK")
 		case "getawsstatus":
-			// Texto plano, como responde Vocareum de verdad.
+			// Plain text, as Vocareum really answers.
 			if f.labOn {
 				fmt.Fprint(w, "Lab status: ready<br>")
 				return
@@ -85,7 +85,7 @@ func newFakeAcademy(t *testing.T) *fakeAcademy {
 			fmt.Fprint(w, "Lab status: stopped<br>")
 		case "getaws":
 			if !f.labOn {
-				http.Error(w, "el laboratorio no está corriendo", http.StatusConflict)
+				http.Error(w, "the lab is not running", http.StatusConflict)
 				return
 			}
 			fmt.Fprintf(w, `<strong>Cloud Access</strong><br>
@@ -141,24 +141,24 @@ aws_session_token=IQoJb3JpZ2luX2VjEO7wEaCXVzLXdlc3QtMiJHMEUCIQDexampleTokenValue
 	})
 	canvas.HandleFunc("/api/v1/courses/182613/modules", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `[{"id":1,"name":"Módulos","items":[
-			{"id":18010855,"title":"Iniciar el Laboratorio de aprendizaje de AWS Academy",
+		fmt.Fprintf(w, `[{"id":1,"name":"Modules","items":[
+			{"id":18010855,"title":"Start the AWS Academy Learner Lab",
 			 "type":"ExternalTool","external_url":%q,
 			 "html_url":"%s/courses/182613/modules/items/18010855"}]}]`,
 			f.provider.URL+"/lti/launch", f.canvas.URL)
 	})
-	// La página del ítem: Canvas envuelve la herramienta en un iframe.
+	// The item page: Canvas wraps the tool in an iframe.
 	canvas.HandleFunc("/courses/182613/modules/items/18010855", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<html><body><iframe id="tool_content" src="/courses/182613/external_tools/retrieve"></iframe></body></html>`)
 	})
-	// Dentro del iframe vive el formulario firmado que se auto-envía.
+	// Inside the iframe lives the signed form that submits itself.
 	canvas.HandleFunc("/courses/182613/external_tools/retrieve", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, `<html><body>
 			<form action="%s/lti/launch" method="POST" name="ltiLaunchForm">
 				<input type="hidden" name="oauth_consumer_key" value="key"/>
-				<input type="hidden" name="oauth_signature" value="firma"/>
+				<input type="hidden" name="oauth_signature" value="signature"/>
 			</form>
 			<script>document.ltiLaunchForm.submit();</script>
 			</body></html>`, f.provider.URL)
@@ -173,7 +173,7 @@ aws_session_token=IQoJb3JpZ2luX2VjEO7wEaCXVzLXdlc3QtMiJHMEUCIQDexampleTokenValue
 	return f
 }
 
-// setupEnv aísla config, estado y ficheros de AWS en directorios temporales.
+// setupEnv isolates the config, the state and the AWS files in temp directories.
 func setupEnv(t *testing.T, canvasURL string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -182,7 +182,7 @@ func setupEnv(t *testing.T, canvasURL string) {
 	t.Setenv("AWS_CONFIG_FILE", filepath.Join(dir, "aws-config"))
 	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "aws-credentials"))
 
-	// xdg cachea las rutas al importarse, así que hay que releerlas.
+	// xdg caches the paths when imported, so they have to be re-read.
 	xdg.Reload()
 
 	cfgDir := filepath.Join(dir, "config", "awsacademy")
@@ -210,16 +210,16 @@ func TestFullLabFlow(t *testing.T) {
 		t.Fatalf("newApp: %v", err)
 	}
 
-	// 1. Autenticarse y descubrir el laboratorio sin URLs hardcodeadas.
+	// 1. Authenticate and discover the lab with no hardcoded URLs.
 	user, err := app.EnsureSession(ctx)
 	if err != nil {
 		t.Fatalf("EnsureSession: %v", err)
 	}
 	if user.Name != "Ada Lovelace" {
-		t.Errorf("usuario = %q", user.Name)
+		t.Errorf("user = %q", user.Name)
 	}
 
-	// 2. Atravesar el lanzamiento LTI: iframe, formulario firmado y salto de host.
+	// 2. Go through the LTI launch: iframe, signed form and host jump.
 	lab, disc, err := app.OpenLab(ctx)
 	if err != nil {
 		t.Fatalf("OpenLab: %v", err)
@@ -228,19 +228,19 @@ func TestFullLabFlow(t *testing.T) {
 	if disc.CourseID != "182613" {
 		t.Errorf("CourseID = %q", disc.CourseID)
 	}
-	// Los endpoints deben salir del JavaScript de la página, no de las conjeturas.
+	// The endpoints must come from the page's JavaScript, not from the guesses.
 	wantStart := fake.provider.URL + "/util/vcput.php?a=startaws&stepid=5679250&version=0&mode=s&type=1"
 	if got := lab.Endpoints().Start; got != wantStart {
-		t.Errorf("endpoint Start =\n  %q\nesperaba el detectado en la página\n  %q", got, wantStart)
+		t.Errorf("Start endpoint =\n  %q\nexpected the one detected on the page\n  %q", got, wantStart)
 	}
 
-	// 3. Arrancar y esperar.
+	// 3. Start and wait.
 	st, err := lab.Status(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if st.Running() {
-		t.Fatal("el laboratorio no debería estar corriendo todavía")
+		t.Fatal("the lab should not be running yet")
 	}
 	if err := lab.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -249,18 +249,18 @@ func TestFullLabFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WaitForRunning: %v", err)
 	}
-	// 4. Leer credenciales y escribirlas donde el AWS CLI las busca.
-	// Details trae credenciales y estado de una sola vez, que es como
-	// Vocareum los sirve.
+	// 4. Read the credentials and write them where the AWS CLI looks for them.
+	// Details brings credentials and status in one go, which is how Vocareum
+	// serves them.
 	st, creds, err := lab.Details(ctx)
 	if err != nil {
 		t.Fatalf("Details: %v", err)
 	}
 	if st.Remaining < 3*time.Hour || st.Remaining > 4*time.Hour {
-		t.Errorf("Remaining = %v, esperaba ~3h58m", st.Remaining)
+		t.Errorf("Remaining = %v, expected ~3h58m", st.Remaining)
 	}
 	if creds.Expiration.IsZero() {
-		t.Error("esperaba la expiración publicada por Vocareum")
+		t.Error("expected the expiry published by Vocareum")
 	}
 	if creds.AccessKeyID != "ASIAQZXK4NEXAMPLE01" {
 		t.Errorf("AccessKeyID = %q", creds.AccessKeyID)
@@ -276,19 +276,19 @@ func TestFullLabFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), "ASIAQZXK4NEXAMPLE01") {
-		t.Errorf("las credenciales no llegaron al fichero:\n%s", raw)
+		t.Errorf("the credentials never reached the file:\n%s", raw)
 	}
 
-	// 5. La sesión guardada tiene que servir a un proceso nuevo sin re-loguear.
+	// 5. The saved session has to serve a fresh process without logging in again.
 	fresh, err := newApp(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := fresh.canvas.Whoami(ctx); err != nil {
-		t.Errorf("la sesión guardada no revivió: %v", err)
+		t.Errorf("the saved session did not revive: %v", err)
 	}
 
-	// 6. Detener.
+	// 6. Stop.
 	if err := lab.Stop(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestFullLabFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if after.Running() {
-		t.Error("el laboratorio debería estar detenido")
+		t.Error("the lab should be stopped")
 	}
 }
 
@@ -313,13 +313,13 @@ func TestCredsRefusesWhenExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// credential_process no debe levantar el laboratorio: cada comando `aws`
-	// se colgaría minutos. Tiene que fallar rápido y decir qué hacer.
+	// credential_process must not bring the lab up: every `aws` command would
+	// hang for minutes. It has to fail fast and say what to do.
 	loaded, err := state.LoadCredentials()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !loaded.Expired() {
-		t.Fatal("las credenciales vencidas deberían detectarse como tales")
+		t.Fatal("expired credentials should be detected as such")
 	}
 }

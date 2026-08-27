@@ -1,4 +1,4 @@
-// Package ui son las interacciones de terminal que no encajan en un flag.
+// Package ui holds the terminal interactions that do not fit in a flag.
 package ui
 
 import (
@@ -11,26 +11,26 @@ import (
 	"golang.org/x/term"
 )
 
-// ErrCancelled indica que la persona abandonó la selección.
-var ErrCancelled = errors.New("selección cancelada")
+// ErrCancelled means the person abandoned the selection.
+var ErrCancelled = errors.New("selection cancelled")
 
-// Option es una entrada del menú.
+// Option is a menu entry.
 type Option struct {
-	// Label es la línea principal.
+	// Label is the main line.
 	Label string
-	// Hint es el detalle que ayuda a decidir; se muestra atenuado.
+	// Hint is the detail that helps decide; it is shown dimmed.
 	Hint string
 }
 
-// Select muestra un menú y devuelve el índice elegido.
+// Select shows a menu and returns the chosen index.
 //
-// Con terminal se navega con las flechas y se confirma con Enter. Sin ella
-// —una tubería, un script, un test— cae en una lista numerada, porque el modo
-// crudo requiere un terminal de verdad y no queremos que la herramienta se
-// vuelva inusable fuera de una sesión interactiva.
+// With a terminal you navigate with the arrows and confirm with Enter. Without
+// one — a pipe, a script, a test — it falls back to a numbered list, because
+// raw mode requires a real terminal and we do not want the tool to become
+// unusable outside an interactive session.
 func Select(ctx Context, prompt string, options []Option, defaultIdx int) (int, error) {
 	if len(options) == 0 {
-		return 0, errors.New("no hay opciones que elegir")
+		return 0, errors.New("there are no options to choose from")
 	}
 	if defaultIdx < 0 || defaultIdx >= len(options) {
 		defaultIdx = 0
@@ -51,28 +51,28 @@ func selectInteractive(ctx Context, fd int, prompt string, options []Option, cur
 	if err != nil {
 		return selectNumbered(ctx, prompt, options, cursor)
 	}
-	// El terminal queda inservible si salimos sin restaurarlo, incluso ante un
-	// error o un pánico, así que se restaura pase lo que pase.
+	// The terminal is left unusable if we exit without restoring it, even on an
+	// error or a panic, so it is restored no matter what.
 	defer term.Restore(fd, oldState)
 
 	out := os.Stderr
 	fmt.Fprintf(out, "%s\r\n", prompt)
-	fmt.Fprint(out, "\x1b[?25l")       // ocultar el cursor mientras navegamos
-	defer fmt.Fprint(out, "\x1b[?25h") // y devolverlo al terminar
+	fmt.Fprint(out, "\x1b[?25l")       // hide the cursor while we navigate
+	defer fmt.Fprint(out, "\x1b[?25h") // and give it back when we are done
 
 	render(out, options, cursor)
 
-	// Repintar es siempre lo mismo: volver al principio del bloque y volver a
-	// dibujarlo encima. Hacerlo sin subir primero deja una copia de la lista
-	// debajo de la anterior.
+	// Repainting is always the same: go back to the start of the block and draw
+	// it again on top. Doing it without going up first leaves a copy of the
+	// list below the previous one.
 	repaint := func() {
 		fmt.Fprintf(out, "\x1b[%dA", len(options))
 		render(out, options, cursor)
 	}
 
-	// El modo crudo desactiva ISIG, así que Ctrl+C no llega como señal sino
-	// como el byte 3; se atiende abajo. El contexto se vigila igualmente por si
-	// la cancelación viene de otro sitio.
+	// Raw mode disables ISIG, so Ctrl+C does not arrive as a signal but as byte
+	// 3; that is handled below. The context is watched anyway in case the
+	// cancellation comes from somewhere else.
 	type keypress struct {
 		buf []byte
 		n   int
@@ -108,7 +108,7 @@ func selectInteractive(ctx Context, fd int, prompt string, options []Option, cur
 			repaint()
 			return cursor, nil
 
-		case n == 1 && (buf[0] == 3 || buf[0] == 'q'): // Ctrl-C o q
+		case n == 1 && (buf[0] == 3 || buf[0] == 'q'): // Ctrl-C or q
 			repaint()
 			return 0, ErrCancelled
 
@@ -119,7 +119,7 @@ func selectInteractive(ctx Context, fd int, prompt string, options []Option, cur
 			cursor = (cursor + 1) % len(options)
 
 		case n == 1 && buf[0] >= '1' && buf[0] <= '9':
-			// Un atajo: teclear el número salta directamente a esa opción.
+			// A shortcut: typing the number jumps straight to that option.
 			if idx := int(buf[0] - '1'); idx < len(options) {
 				cursor = idx
 			}
@@ -128,11 +128,11 @@ func selectInteractive(ctx Context, fd int, prompt string, options []Option, cur
 	}
 }
 
-// render dibuja la lista con la opción actual marcada.
+// render draws the list with the current option marked.
 func render(out io.Writer, options []Option, cursor int) {
 	for i, opt := range options {
-		// \x1b[K borra el resto de la línea: sin eso, una etiqueta corta
-		// dejaría a la vista el final de la anterior, más larga.
+		// \x1b[K clears the rest of the line: without it, a short label would
+		// leave the tail of the previous, longer one on screen.
 		if i == cursor {
 			fmt.Fprintf(out, "\x1b[K  \x1b[1;36m❯ %s\x1b[0m", opt.Label)
 		} else {
@@ -145,7 +145,7 @@ func render(out io.Writer, options []Option, cursor int) {
 	}
 }
 
-// selectNumbered es la variante para cuando no hay terminal interactivo.
+// selectNumbered is the variant for when there is no interactive terminal.
 func selectNumbered(ctx Context, prompt string, options []Option, defaultIdx int) (int, error) {
 	fmt.Fprintf(os.Stderr, "%s\n", prompt)
 	for i, opt := range options {
@@ -156,7 +156,7 @@ func selectNumbered(ctx Context, prompt string, options []Option, defaultIdx int
 		fmt.Fprintln(os.Stderr, line)
 	}
 	answer, err := Prompt(ctx, os.Stdin,
-		fmt.Sprintf("\nElegí [1-%d, enter = %d]: ", len(options), defaultIdx+1))
+		fmt.Sprintf("\nChoose [1-%d, enter = %d]: ", len(options), defaultIdx+1))
 	if err != nil {
 		return 0, err
 	}
@@ -165,7 +165,7 @@ func selectNumbered(ctx Context, prompt string, options []Option, defaultIdx int
 	}
 	n, err := strconv.Atoi(answer)
 	if err != nil || n < 1 || n > len(options) {
-		return 0, fmt.Errorf("elegí un número entre 1 y %d", len(options))
+		return 0, fmt.Errorf("choose a number between 1 and %d", len(options))
 	}
 	return n - 1, nil
 }
