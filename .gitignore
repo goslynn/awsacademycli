@@ -1,0 +1,7 @@
+/awsacademy
+/vockit
+/dist/
+
+# Las capturas de vockit llevan cookies de sesión y credenciales en claro.
+captura*.json
+*.har

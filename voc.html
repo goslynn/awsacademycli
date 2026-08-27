@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<!--[if IE 7]> <html lang="en" class="ie7"> <![endif]-->
+<!--[if IE 8]> <html lang="en" class="ie8"> <![endif]-->
+<!--[if IE 9]> <html lang="en" class="ie9"> <![endif]-->
+<!--[if !IE]><!-->
+<html lang="en">
+<!--<![endif]-->
+
+<head>
+  <!-- <title>Vocareum | Cloud Labs for Learning</title> -->
+  <title>Vocareum | Cloud Labs for Learning</title>
+
+  <!-- Meta -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="The Vocareum cloud labs for learning leverage cloud infrastructure to enable learners to be a single click away from coding applications. Our platform significantly reduces IT cost and can be integrated with any learning content">
+  <meta name="author" content="">
+
+  <!-- CSS Global Compulsory-->
+  <link rel="stylesheet" href="../shared/vocunify/assets/plugins/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../shared/vocunify/assets/css/style.css">
+
+  <link rel="stylesheet" href="../shared/vocunify/assets/css/headers/header1.css">
+  <link rel="stylesheet" href="../shared/vocunify/assets/plugins/bootstrap/css/bootstrap-responsive.min.css">
+  <link rel="stylesheet" href="../shared/vocunify/assets/css/style_responsive.css">
+  <!-- CSS Implementing Plugins -->
+  <link rel="stylesheet" href="../shared/vocunify/assets/plugins/flexslider/flexslider.css" type="text/css" media="screen">
+  <link rel="stylesheet" href="../shared/vocunify/assets/plugins/parallax-slider/css/parallax-slider.css" type="text/css">
+  <!-- CSS Theme -->
+  <link rel="stylesheet" href="../shared/vocunify/assets/css/themes/blue.css" id="style_color">
+  <link rel="stylesheet" href="../shared/vocunify/assets/css/themes/headers/header1-blue.css" id="style_color-header-1">
+  <link rel="stylesheet" href="../home/vocareum.css">
+</head>
+
+<style>
+  .voc-h1-small {
+    font-size: 24.5px;
+  }
+
+  .alert,
+  .alert-warning {
+    color: #856404 !important;
+  }
+
+  .alert-success {
+    color: #155724 !important;
+  }
+
+  .alert-error,
+  .alert-danger {
+    color: #721c24 !important;
+  }
+
+  .voc-link {
+    color: rgb(32, 57, 157);
+  }
+  
+  /* create an orange outline when using keyboard navigation of elements via tabbing
+  note: I added a class for when higher css specificity overrule is needed due to !important conflicts */
+  :focus-visible,
+  .tab-focus:focus-visible { 
+      position: relative !important;
+      z-index: 9999 !important;
+      outline-offset: 2px !important;
+      outline: 3px solid #E96115 !important;
+  }
+</style>
+
+<body>
+  <div class="body-bg-img"></div>
+    
+    <script>
+        function beep() {
+            const snd = new Audio("data:audio/wav;base64,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qJrx4KOQjahZxWbcZgztj2c49nKmkId44S71j0c8eV9yDK6uPRzx5X18eDvjvQ6yKo9ZSS6l//8elePK/Lf//IInrOF/FvDoADYAGBMGb7FtErm5MXMlmPAJQVgWta7Zx2go+8xJ0UiCb8LHHdftWyLJE0QIAIsI+UbXu67dZMjmgDGCGl1H+vpF4NSDckSIkk7Vd+sxEhBQMRU8j/12UIRhzSaUdQ+rQU5kGeFxm+hb1oh6pWWmv3uvmReDl0UnvtapVaIzo1jZbf/pD6ElLqSX+rUmOQNpJFa/r+sa4e/pBlAABoAAAAA3CUgShLdGIxsY7AUABPRrgCABdDuQ5GC7DqPQCgbbJUAoRSUj+NIEig0YfyWUho1VBBBA//uQZB4ABZx5zfMakeAAAAmwAAAAF5F3P0w9GtAAACfAAAAAwLhMDmAYWMgVEG1U0FIGCBgXBXAtfMH10000EEEEEECUBYln03TTTdNBDZopopYvrTTdNa325mImNg3TTPV9q3pmY0xoO6bv3r00y+IDGid/9aaaZTGMuj9mpu9Mpio1dXrr5HERTZSmqU36A3CumzN/9Robv/Xx4v9ijkSRSNLQhAWumap82WRSBUqXStV/YcS+XVLnSS+WLDroqArFkMEsAS+eWmrUzrO0oEmE40RlMZ5+ODIkAyKAGUwZ3mVKmcamcJnMW26MRPgUw6j+LkhyHGVGYjSUUKNpuJUQoOIAyDvEyG8S5yfK6dhZc0Tx1KI/gviKL6qvvFs1+bWtaz58uUNnryq6kt5RzOCkPWlVqVX2a/EEBUdU1KrXLf40GoiiFXK///qpoiDXrOgqDR38JB0bw7SoL+ZB9o1RCkQjQ2CBYZKd/+VJxZRRZlqSkKiws0WFxUyCwsKiMy7hUVFhIaCrNQsKkTIsLivwKKigsj8XYlwt/WKi2N4d//uQRCSAAjURNIHpMZBGYiaQPSYyAAABLAAAAAAAACWAAAAApUF/Mg+0aohSIRobBAsMlO//Kk4soosy1JSFRYWaLC4qZBYWFRGZdwqKiwkNBVmoWFSJkWFxX4FFRQWR+LsS4W/rFRb/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VEFHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAU291bmRib3kuZGUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMjAwNGh0dHA6Ly93d3cuc291bmRib3kuZGUAAAAAAAAAACU=");
+            snd.play();
+        }
+    </script>
+    <script>
+        function onSubmit(response) {
+            document.getElementById("log-auth").submit();
+        }
+    </script>
+    <!--=== Breadcrumbs ===-->
+    <br><br>
+    <!--=== Content Part ===-->
+    <div id="login-page" class="container">
+        <!-- Login Container -->
+        <div id="voc-login" class="login-container login-resp main-login-cont"
+             role="main">
+            <!-- Login Header -->
+            <div class="login-header login-resp">
+                <a href="https://www.vocareum.com/" aria-label="Vocareum">
+                    <img class="login-logo" src="../shared/ico/vocareum-logo.svg">
+                </a>
+            </div>
+            <!-- /Login Header End -->
+            <!-- Login Content Container -->
+            <div class="login-content login-resp">
+                <!-- Auth Container -->
+                <div class="auth-container">
+                    <!-- Auth Form -->
+                    <div class="auth-form">
+                        <form id="log-auth" method="POST"
+                              action="../util/vcauth.php">
+                            <input type="hidden" name="recaptcha_token" value="">
+                                                                                    <div class="auth-form-content">
+                                <h1 id="auth-form-title" class="voc-h1-small">
+                                    Login</h1>
+                            </div>
+                            <input name="sender" value="home" type="hidden"/>
+                            <div class="control-group">
+                                <div class="controls">
+                                                                        <input id="inputEmail" name="loginid"
+                                           class="border-radius-none auth-input inp-email"
+                                           placeholder="Email"
+                                           autocomplete="email"
+                                           type="text" aria-label="Email"
+                                           minlength="6" autofocus tabindex="0"
+                                           required >
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <div class="controls">
+                                    <input id="inputPassword" name="passwd"
+                                           class="border-radius-none auth-input inp-pswd"
+                                           placeholder="Password"
+                                           autocomplete="current-password"
+                                           type="password" aria-label="Password"
+                                           minlength="7" required tabindex="0">
+                                </div>
+                            </div>
+                            <!-- Sign-In Action Begin -->
+                            <div class="control-group" id="submissioncontrol">
+                                <div class="controls">
+                                                                        <button id="loginButton"
+                                        class="btn btn-primary btn-block login-btn"
+                                        tabindex="0">Continue
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- /Sign-In Action End -->
+                                                    </form>
+                                            </div>
+                    <!-- /auth-form -->
+                    <!-- Auth Footer -->
+                    <div class="auth-footer" style="text-align: center" tabindex="0">
+                        <a class="vocalert log-link" href="forgot.php">Forgot
+                            password?</a>
+                    </div>
+                    <!-- Auth Footer End -->
+                </div>
+                <!-- /auth-content -->
+            </div>
+            <!-- /login-content -->
+        </div>
+        <!-- /login-container -->
+    </div>
+    <!--/container-->
+    <!--=== End Content Part ===-->
+    <!-- <script type="text/javascript" src="../shared/vocunify/assets/js/jquery-1.8.2.min.js"></script> -->
+    <script type="text/javascript" src="../shared/ace/assets/js/jquery-3.7.1.min.js"></script>
+        <script src="https://www.google.com/recaptcha/api.js?render=6LeWOoEsAAAAAEolme97AUM7Pskv27Z-MkHv4tM-"></script>
+    <script>
+        const RECAPTCHA_SITE_KEY = '6LeWOoEsAAAAAEolme97AUM7Pskv27Z-MkHv4tM-';
+
+        $('#log-auth').on('submit', function (e) {
+            e.preventDefault();
+            var $form = $(this);
+            grecaptcha.ready(function () {
+                grecaptcha.execute(RECAPTCHA_SITE_KEY, {action: 'login'}).then(function (token) {
+                    $form.find('input[name=recaptcha_token]').val(token);
+                    $form.off('submit').submit();
+                });
+            });
+        });
+    </script>
+        <script>
+        $(document).ready(function () {
+            if (self !== top && 1) {
+                $('#errorMsg').html("You are seeing this message because this site uses cookies which are being rejected by your browser. If you have configured your browser to disable 3rd party cookies, please re-enable them, at least for this site (labs.vocareum.com) and reload the page");
+            } else {
+                $('#errorMsg').html("");
+                beep();
+            }
+        });
+    </script>
+
+<!-- JS Global Compulsory -->			
+<!-- <script type="text/javascript" src="../shared/vocunify/assets/js/jquery-1.8.2.min.js"></script> -->
+<script type="text/javascript" src="../shared/ace/assets/js/jquery-3.7.1.min.js"></script>
+<script type="text/javascript" src="../shared/vocunify/assets/js/modernizr.custom.js"></script>		
+<script type="text/javascript" src="../shared/vocunify/assets/plugins/bootstrap/js/bootstrap.min.js"></script>	
+<!-- JS Implementing Plugins -->           
+
+<!-- JS Page Level -->           
+<script type="text/javascript" src="../shared/vocunify/assets/js/pages/index.js"></script>
+<script type="text/javascript">
+    jQuery(document).ready(function() {
+    });
+</script>
+<!--[if lt IE 9]>
+    <script src="../shared/vocunify/assets/js/respond.js"></script>
+<![endif]-->
+
+</body>
+</html>	
