@@ -91,15 +91,79 @@ func TestParseRemaining(t *testing.T) {
 	}
 }
 
-func TestParseBudget(t *testing.T) {
-	used, total, ok := ParseBudget("$12.34 used of $100")
-	if !ok {
-		t.Fatal("expected to find the budget")
+func TestParseBudgetJSON(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		used, total float64
+		monthly     bool
+	}{
+		{
+			// The real shape, as the lab answers it: amounts quoted, an absent
+			// allowance as a bare zero, in the same object.
+			name:  "the total budget, with mixed types",
+			body:  `{"total_budget":"50.00","monthly_budget":0,"total_spend":"0.014342","monthly_spend":"0.014342"}`,
+			used:  0.014342,
+			total: 50,
+		},
+		{
+			// A monthly allowance wins over the total, which is the rule the
+			// page's own budgetString2 follows.
+			name:    "a monthly allowance takes precedence",
+			body:    `{"total_budget":"100.00","total_spend":"75.00","monthly_budget":"20.00","monthly_spend":"3.50"}`,
+			used:    3.5,
+			total:   20,
+			monthly: true,
+		},
+		{
+			name:  "amounts may arrive unquoted",
+			body:  `{"total_budget":50,"monthly_budget":0,"total_spend":12.5,"monthly_spend":0}`,
+			used:  12.5,
+			total: 50,
+		},
+		{
+			name:  "a null allowance is not an allowance",
+			body:  `{"total_budget":"50.00","monthly_budget":null,"total_spend":"1.00","monthly_spend":null}`,
+			used:  1,
+			total: 50,
+		},
 	}
-	if used != 12.34 {
-		t.Errorf("used = %v, expected 12.34", used)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			budget, err := ParseBudgetJSON(tt.body)
+			if err != nil {
+				t.Fatalf("ParseBudgetJSON: %v", err)
+			}
+			if budget.Used != tt.used {
+				t.Errorf("used = %v, expected %v", budget.Used, tt.used)
+			}
+			if budget.Total != tt.total {
+				t.Errorf("total = %v, expected %v", budget.Total, tt.total)
+			}
+			if budget.Monthly != tt.monthly {
+				t.Errorf("monthly = %v, expected %v", budget.Monthly, tt.monthly)
+			}
+		})
 	}
-	if total != 100 {
-		t.Errorf("total = %v, expected 100", total)
+}
+
+func TestParseBudgetJSONRejects(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		// Vocareum says so in plain text instead of failing the request; the
+		// page checks for exactly this before parsing.
+		{"the failure marker", "fail_getaws_cost"},
+		{"the credentials panel, asked for with the wrong v=", "<pre>[default]\naws_access_key_id=ASIA...</pre>"},
+		{"an empty response", ""},
+		{"no cap at all", `{"total_budget":0,"monthly_budget":0,"total_spend":"1.00","monthly_spend":0}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if budget, err := ParseBudgetJSON(tt.body); err == nil {
+				t.Errorf("expected an error, got %+v", budget)
+			}
+		})
 	}
 }

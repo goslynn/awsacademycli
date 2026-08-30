@@ -63,6 +63,7 @@ func newFakeAcademy(t *testing.T) *fakeAcademy {
 			function endLab(){ vcAjax("../util/vcput.php?a=endaws&stepid=5679250&version=0&mode=s&type=1"); }
 			setInterval(function(){ vcAjax("../util/vcput.php?a=getawsstatus&stepid=5679250&version=0&mode=s&type=1"); },5000);
 			function creds(){ vcAjax("../util/vcput.php?a=getaws&type=1&stepid=5679250&version=0&v="); }
+			function updatecloudbudget(){ vcAjax("../util/vcput.php?a=getaws&type=1&stepid=5679250&version=0&v=3"); }
 			function startAzure(){ vcAjax("../util/vcput.php?a=startazure&stepid=5679250"); }
 			</script></body></html>`)
 	})
@@ -86,6 +87,13 @@ func newFakeAcademy(t *testing.T) *fakeAcademy {
 		case "getaws":
 			if !f.labOn {
 				http.Error(w, "the lab is not running", http.StatusConflict)
+				return
+			}
+			// One action, two answers: v=3 is the spend, anything else is the
+			// credentials panel.
+			if r.URL.Query().Get("v") == "3" {
+				fmt.Fprint(w, `{"total_budget":"50.00","monthly_budget":0,`+
+					`"total_spend":"12.50","monthly_spend":"12.50"}`)
 				return
 			}
 			fmt.Fprintf(w, `<strong>Cloud Access</strong><br>
@@ -233,6 +241,15 @@ func TestFullLabFlow(t *testing.T) {
 	if got := lab.Endpoints().Start; got != wantStart {
 		t.Errorf("Start endpoint =\n  %q\nexpected the one detected on the page\n  %q", got, wantStart)
 	}
+	// Credentials and budget are the same action and must not be confused: the
+	// one with v=3 is the spend, and taking it for the other means asking for
+	// credentials and being handed JSON.
+	if got := lab.Endpoints().Credentials; strings.Contains(got, "v=3") {
+		t.Errorf("the credentials endpoint picked up the budget call: %q", got)
+	}
+	if got := lab.Endpoints().Budget; !strings.Contains(got, "v=3") {
+		t.Errorf("Budget endpoint = %q, expected the a=getaws call with v=3", got)
+	}
 
 	// 3. Start and wait.
 	st, err := lab.Status(ctx)
@@ -264,6 +281,15 @@ func TestFullLabFlow(t *testing.T) {
 	}
 	if creds.AccessKeyID != "ASIAQZXK4NEXAMPLE01" {
 		t.Errorf("AccessKeyID = %q", creds.AccessKeyID)
+	}
+
+	// The spend lives at its own endpoint, so it takes its own request.
+	budget, err := lab.Budget(ctx)
+	if err != nil {
+		t.Fatalf("Budget: %v", err)
+	}
+	if budget.Used != 12.50 || budget.Total != 50 {
+		t.Errorf("budget = $%.2f of $%.2f, expected $12.50 of $50.00", budget.Used, budget.Total)
 	}
 	if err := creds.Save(); err != nil {
 		t.Fatal(err)

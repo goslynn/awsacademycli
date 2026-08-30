@@ -72,6 +72,9 @@ refreshes the credentials. You can call it as many times as you like.`,
 				return err
 			}
 			st = detail
+			if budget, err := lab.Budget(ctx); err == nil {
+				st.BudgetUsed, st.BudgetTotal = budget.Used, budget.Total
+			}
 			if creds.Region == "" {
 				creds.Region = app.cfg.Region
 			}
@@ -113,11 +116,12 @@ func reportStart(ctx context.Context, app *App, st *vocareum.Status,
 
 	if flagJSON {
 		out := map[string]any{
-			"state":       string(st.State),
-			"profile":     profile,
-			"written_to":  target,
-			"remaining":   st.Remaining.Round(time.Second).String(),
-			"budget_used": st.BudgetUsed,
+			"state":        string(st.State),
+			"profile":      profile,
+			"written_to":   target,
+			"remaining":    st.Remaining.Round(time.Second).String(),
+			"budget_used":  st.BudgetUsed,
+			"budget_total": st.BudgetTotal,
 		}
 		if identity != nil {
 			out["arn"] = identity.ARN
@@ -133,9 +137,7 @@ func reportStart(ctx context.Context, app *App, st *vocareum.Status,
 	if st.Remaining > 0 {
 		fmt.Printf("  remaining    %s of session\n", st.Remaining.Round(time.Second))
 	}
-	if st.BudgetTotal > 0 {
-		fmt.Printf("  budget       $%.2f of $%.2f\n", st.BudgetUsed, st.BudgetTotal)
-	}
+	printBudget("  ", st.BudgetUsed, st.BudgetTotal)
 	fmt.Printf("  profile      %s -> %s\n", profile, target)
 	if valErr != nil {
 		// Not fatal: the credentials are saved and this may be a network

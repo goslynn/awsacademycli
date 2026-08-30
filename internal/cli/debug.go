@@ -109,6 +109,7 @@ files the page references, which is where they usually live.`,
 			fmt.Printf("  start        %s\n", ep.Start)
 			fmt.Printf("  stop         %s\n", ep.Stop)
 			fmt.Printf("  credentials  %s\n", ep.Credentials)
+			fmt.Printf("  budget       %s\n", lab.BudgetURL())
 			fmt.Fprintf(os.Stderr,
 				"\nConfirmed values go in 'vocareum_endpoints' of %s/discovery.json\n",
 				stateDirHint())
@@ -131,6 +132,8 @@ func probeEndpoints(ctx context.Context, app *App, lab *vocareum.Lab) error {
 	for _, probe := range []struct{ name, url string }{
 		{"status (a=getawsstatus)", ep.Status},
 		{"credentials (a=getaws)", ep.Credentials},
+		// Derived when the page did not spell it out, which is the usual case.
+		{"budget (a=getaws&v=3)", lab.BudgetURL()},
 	} {
 		fmt.Printf("== %s ==\n%s\n", probe.name, probe.url)
 		if probe.url == "" {

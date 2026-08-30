@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/goslynn/awsacademycli/internal/state"
@@ -32,6 +33,18 @@ type Status struct {
 
 // Running reports whether the lab is ready to be used.
 func (s Status) Running() bool { return s.State == StateRunning }
+
+// Budget is what the lab has spent against what it is allowed to spend.
+//
+// It is the limit that does not reset: the session countdown comes back
+// tomorrow, the budget does not, and the lab is cut off when it runs out.
+type Budget struct {
+	Used  float64
+	Total float64
+	// Monthly says the figures are a monthly allowance rather than the lab's
+	// total, which changes what "left" means.
+	Monthly bool
+}
 
 // Lab controls the lab of a session.
 type Lab struct {
@@ -197,6 +210,47 @@ func (l *Lab) Details(ctx context.Context) (*Status, *state.Credentials, error) 
 	return st, creds, nil
 }
 
+// Budget queries what the lab has spent.
+//
+// It is a separate request because Vocareum serves it separately: the same
+// a=getaws action answers with JSON instead of the credentials panel when
+// asked with v=3.
+func (l *Lab) Budget(ctx context.Context) (*Budget, error) {
+	endpoint := l.BudgetURL()
+	if err := l.check(endpoint, "budget"); err != nil {
+		return nil, err
+	}
+	resp, err := l.session.http.Get(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("could not query the lab budget: %w", err)
+	}
+	return ParseBudgetJSON(resp.String())
+}
+
+// BudgetURL resolves where to ask for the spend.
+//
+// It is usually derived rather than detected: the page builds that URL by
+// concatenation ("…&v=" + v), so the value that selects the budget never
+// appears as a literal for DetectEndpoints to find. Deriving it from the
+// credentials endpoint, which is the same URL with a different v=, is both
+// cheaper and steadier than failing over one parameter.
+func (l *Lab) BudgetURL() string {
+	if l.endpoints.Budget != "" {
+		return l.endpoints.resolve(l.session.base, l.endpoints.Budget)
+	}
+	if l.endpoints.Credentials == "" {
+		return ""
+	}
+	u, err := url.Parse(l.endpoints.resolve(l.session.base, l.endpoints.Credentials))
+	if err != nil {
+		return ""
+	}
+	q := u.Query()
+	q.Set("v", budgetVersion)
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 func (l *Lab) poll(ctx context.Context) (string, error) {
 	if err := l.check(l.endpoints.Status, "status"); err != nil {
 		return "", err
@@ -242,8 +296,8 @@ func parseStatus(body string) *Status {
 			st.State = StateRunning
 		}
 	}
-	if used, total, ok := ParseBudget(body); ok {
-		st.BudgetUsed, st.BudgetTotal = used, total
-	}
+	// The spend is deliberately not looked for here: it does not travel in
+	// these responses at all, and hunting for dollar signs in them only ever
+	// found amounts that meant something else. It has its own endpoint.
 	return st
 }

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/goslynn/awsacademycli/internal/awscreds"
 	"github.com/goslynn/awsacademycli/internal/canvas"
 	"github.com/goslynn/awsacademycli/internal/state"
+	"github.com/goslynn/awsacademycli/internal/ui"
 	"github.com/goslynn/awsacademycli/internal/vocareum"
 	"github.com/spf13/cobra"
 )
@@ -143,11 +145,16 @@ func collectLabStatus(ctx context.Context, app *App, r *statusReport) {
 		r.Lab.Error = err.Error()
 		return
 	}
-	// The countdown does not travel in the status response, only alongside the
-	// credentials, so it is requested only when there is something to count.
+	// Neither the countdown nor the spend travels in the status response, and
+	// each lives at its own endpoint, so both are asked for only when the lab
+	// is up and there is something to report. A failure in either is not
+	// allowed to sink the rest of the report.
 	if st.Running() {
 		if detail, _, err := lab.Details(ctx); err == nil {
 			st = detail
+		}
+		if budget, err := lab.Budget(ctx); err == nil {
+			st.BudgetUsed, st.BudgetTotal = budget.Used, budget.Total
 		}
 	}
 
@@ -222,9 +229,7 @@ func printStatus(r *statusReport) {
 		if r.Lab.Remaining != "" {
 			fmt.Printf("    remaining    %s of session\n", r.Lab.Remaining)
 		}
-		if r.Lab.BudgetTotal > 0 {
-			fmt.Printf("    budget       $%.2f of $%.2f\n", r.Lab.BudgetUsed, r.Lab.BudgetTotal)
-		}
+		printBudget("    ", r.Lab.BudgetUsed, r.Lab.BudgetTotal)
 	}
 
 	fmt.Println("\nAWS CLI")
@@ -253,4 +258,56 @@ func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+// budgetWidth is how wide the spend gauge is drawn. Twenty cells give a
+// resolution of 5%, which is as much as the number below it deserves.
+const budgetWidth = 20
+
+// printBudget draws the lab spend as a gauge.
+//
+// The budget is the other clock: when it runs out the lab stops, and unlike the
+// session countdown it does not come back the next day. A bar shows how close
+// that is in a way that two dollar figures do not.
+func printBudget(indent string, used, total float64) {
+	const label = "budget       "
+
+	if total <= 0 {
+		// Some labs publish the spend without the cap. The number alone is
+		// still worth printing; a gauge without a maximum is not.
+		if used > 0 {
+			fmt.Printf("%s%s$%.2f used\n", indent, label, used)
+		}
+		return
+	}
+
+	fraction := used / total
+	bar := ui.Paint(budgetColour(fraction), ui.Bar(fraction, budgetWidth))
+	fmt.Printf("%s%s%s %3.0f%%  $%.2f of $%.2f\n",
+		indent, label, bar, fraction*100, used, total)
+
+	if fraction >= 0.9 {
+		// The spend is reported with some delay, so it can land above the cap;
+		// by then the warning is about something that has already happened.
+		note := fmt.Sprintf("$%.2f left: the lab stops when the budget runs out", total-used)
+		if used >= total {
+			note = "no budget left: the lab will not come back up"
+		}
+		// Aligned under the bar, because it is the bar it is explaining.
+		fmt.Printf("%s%s%s\n", indent, strings.Repeat(" ", len(label)), ui.Paint(ui.Red, note))
+	}
+}
+
+// budgetColour maps how much of the budget is gone onto the usual three
+// levels. The thresholds are deliberately pessimistic: by the time 75% is
+// spent it is worth knowing, not when there is nothing left.
+func budgetColour(fraction float64) ui.Colour {
+	switch {
+	case fraction >= 0.9:
+		return ui.Red
+	case fraction >= 0.75:
+		return ui.Yellow
+	default:
+		return ui.Green
+	}
 }

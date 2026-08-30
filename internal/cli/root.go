@@ -63,6 +63,7 @@ To get started:
   awsacademy setup     once, saves your AWS Academy credentials
   awsacademy start     brings the lab up and refreshes the AWS profile
   awsacademy status    tells you whether you can work and how much time is left
+  awsacademy console   opens the lab's AWS console in the browser
   awsacademy courses   lists your courses, in case you have more than one
   awsacademy stop      brings the lab down
 
@@ -84,6 +85,7 @@ The configuration lives in:
 		newCoursesCmd(),
 		newStatusCmd(),
 		newStartCmd(),
+		newConsoleCmd(),
 		newStopCmd(),
 		newCredsCmd(),
 		newEnvCmd(),

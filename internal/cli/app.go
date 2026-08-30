@@ -202,11 +202,17 @@ func (a *App) OpenLab(ctx context.Context) (*vocareum.Lab, *state.Discovery, err
 }
 
 func toVocareumEndpoints(e state.Endpoints) vocareum.Endpoints {
-	return vocareum.Endpoints{Status: e.Status, Start: e.Start, Stop: e.Stop, Credentials: e.Credentials}
+	return vocareum.Endpoints{
+		Status: e.Status, Start: e.Start, Stop: e.Stop,
+		Credentials: e.Credentials, Budget: e.Budget,
+	}
 }
 
 func fromVocareumEndpoints(e vocareum.Endpoints) state.Endpoints {
-	return state.Endpoints{Status: e.Status, Start: e.Start, Stop: e.Stop, Credentials: e.Credentials}
+	return state.Endpoints{
+		Status: e.Status, Start: e.Start, Stop: e.Stop,
+		Credentials: e.Credentials, Budget: e.Budget,
+	}
 }
 
 // selfCommand returns this binary's invocation for credential_process.
@@ -219,4 +225,39 @@ func selfCommand() string {
 		return strconv.Quote(exe) + " creds"
 	}
 	return exe + " creds"
+}
+
+// LabCredentials returns credentials that are good right now, going out to
+// Vocareum only when the cached ones are gone or dead.
+//
+// It never starts the lab: bringing it up takes minutes and is a decision the
+// user makes with `start`, not a side effect of another command.
+func (a *App) LabCredentials(ctx context.Context) (*state.Credentials, error) {
+	if creds, err := state.LoadCredentials(); err == nil && !creds.Expired() {
+		return creds, nil
+	}
+
+	lab, _, err := a.OpenLab(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// The state is checked first so a stopped lab is reported as such: asking
+	// for the credentials of a lab that is down fails while complaining that
+	// the AWS Details panel is missing, which explains nothing.
+	st, err := lab.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !st.Running() {
+		return nil, fmt.Errorf("the lab is %s: run 'awsacademy start' first", st.State)
+	}
+
+	_, creds, err := lab.Details(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if creds.Region == "" {
+		creds.Region = a.cfg.Region
+	}
+	return creds, creds.Save()
 }

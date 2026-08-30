@@ -7,6 +7,8 @@
 package vocareum
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -150,24 +152,65 @@ func ParseRemaining(text string) (time.Duration, bool) {
 	return 0, false
 }
 
-// reBudget recognises the accumulated spend: "$12.34 used of $100".
-var reBudget = regexp.MustCompile(`\$\s*([0-9]+(?:\.[0-9]+)?)`)
+// budgetFailure is what Vocareum returns when it cannot reach the billing
+// data. The page checks for exactly this string before parsing.
+const budgetFailure = "fail_getaws_cost"
 
-// ParseBudget returns the lab's spend and cap, in dollars.
+// budgetResponse is what a=getaws&v=3 answers.
 //
-// The lab is cut off when the budget runs out, so it is worth seeing before it
-// happens, not after.
-func ParseBudget(text string) (used, total float64, ok bool) {
-	m := reBudget.FindAllStringSubmatch(text, 2)
-	if len(m) == 0 {
-		return 0, 0, false
+// Vocareum mixes the types in the same object — the amounts come as strings,
+// an absent allowance as the number 0 — so the fields cannot be plain floats.
+type budgetResponse struct {
+	TotalBudget   dollars `json:"total_budget"`
+	TotalSpend    dollars `json:"total_spend"`
+	MonthlyBudget dollars `json:"monthly_budget"`
+	MonthlySpend  dollars `json:"monthly_spend"`
+}
+
+// dollars is an amount that may arrive quoted or bare.
+type dollars float64
+
+func (d *dollars) UnmarshalJSON(raw []byte) error {
+	text := strings.Trim(string(raw), `"`)
+	if text == "" || text == "null" {
+		*d = 0
+		return nil
 	}
-	used, err := strconv.ParseFloat(m[0][1], 64)
+	value, err := strconv.ParseFloat(text, 64)
 	if err != nil {
-		return 0, 0, false
+		return fmt.Errorf("unrecognised amount %s in the budget response", raw)
 	}
-	if len(m) > 1 {
-		total, _ = strconv.ParseFloat(m[1][1], 64)
+	*d = dollars(value)
+	return nil
+}
+
+// ParseBudgetJSON interprets the spend Vocareum reports.
+//
+// It follows the page's own rule: a monthly allowance, when there is one, is
+// what governs; otherwise the lab's total. The two are not added together,
+// they are two ways of capping the same account.
+func ParseBudgetJSON(body string) (*Budget, error) {
+	if strings.Contains(body, budgetFailure) {
+		return nil, errors.New("Vocareum could not retrieve the account's spend")
 	}
-	return used, total, true
+
+	var resp budgetResponse
+	if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &resp); err != nil {
+		return nil, fmt.Errorf("could not read the budget response: %w", err)
+	}
+
+	if resp.MonthlyBudget != 0 {
+		return &Budget{
+			Used:    float64(resp.MonthlySpend),
+			Total:   float64(resp.MonthlyBudget),
+			Monthly: true,
+		}, nil
+	}
+	if resp.TotalBudget != 0 {
+		return &Budget{
+			Used:  float64(resp.TotalSpend),
+			Total: float64(resp.TotalBudget),
+		}, nil
+	}
+	return nil, errors.New("the budget response carries no cap")
 }

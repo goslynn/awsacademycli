@@ -20,6 +20,10 @@ type Endpoints struct {
 	Start       string `json:"start,omitempty"`
 	Stop        string `json:"stop,omitempty"`
 	Credentials string `json:"credentials,omitempty"`
+	// Budget is the same a=getaws action with v=3, which answers with the
+	// spend as JSON instead of the credentials panel. It is optional: a lab
+	// that does not publish it is still perfectly usable.
+	Budget string `json:"budget,omitempty"`
 }
 
 // The vcput.php actions we care about. Vocareum serves several cloud providers
@@ -31,6 +35,11 @@ const (
 	actionStatus = "getawsstatus"
 	actionCreds  = "getaws"
 )
+
+// budgetVersion is the v= value that turns a=getaws into the budget query.
+// The page's own updatecloudbudget() uses it; with any other value the same
+// action returns the credentials panel instead.
+const budgetVersion = "3"
 
 // reVcput captures the API calls inside the page's HTML and JavaScript, with
 // all of their parameters.
@@ -64,7 +73,14 @@ func DetectEndpoints(page *httpx.Response) Endpoints {
 		case actionStatus:
 			setIfEmpty(&found.Status, abs)
 		case actionCreds:
-			setIfEmpty(&found.Credentials, abs)
+			// One action, two answers: the v= parameter decides which. Taking
+			// them for the same endpoint would mean asking for credentials and
+			// being handed the spend, or the other way round.
+			if ref.Query().Get("v") == budgetVersion {
+				setIfEmpty(&found.Budget, abs)
+			} else {
+				setIfEmpty(&found.Credentials, abs)
+			}
 		}
 	}
 	return found
@@ -107,6 +123,7 @@ func (e Endpoints) Merge(other Endpoints) Endpoints {
 	setIfNotEmpty(&e.Start, other.Start)
 	setIfNotEmpty(&e.Stop, other.Stop)
 	setIfNotEmpty(&e.Credentials, other.Credentials)
+	setIfNotEmpty(&e.Budget, other.Budget)
 	return e
 }
 

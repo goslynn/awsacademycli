@@ -61,6 +61,7 @@ type Endpoints struct {
 	Start       string `json:"start,omitempty"`
 	Stop        string `json:"stop,omitempty"`
 	Credentials string `json:"credentials,omitempty"`
+	Budget      string `json:"budget,omitempty"`
 }
 
 // Credentials are the STS credentials Vocareum exposes for the lab.

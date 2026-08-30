@@ -16,6 +16,7 @@ starting…
 
 Lab ready.
   remaining    3h58m0s of session
+  budget       ████████░░░░░░░░░░░░  38%  $18.93 of $50.00
   profile      academy -> credential_process
   ✓ arn:aws:sts::123456789012:assumed-role/voclabs/user1234567
 ```
@@ -40,9 +41,69 @@ $ CGO_ENABLED=0 go build -o awsacademy ./cmd/awsacademy
 $ awsacademy setup     # once: saves your credentials and locates the lab
 $ awsacademy start     # brings the lab up and refreshes the AWS profile
 $ awsacademy courses   # lists your courses and pins the one with the lab
-$ awsacademy status    # can I work? how much time is left?
+$ awsacademy status    # can I work? how much time is left? how much budget?
+$ awsacademy console   # opens the lab's AWS console in the browser
 $ awsacademy stop      # brings the lab down
 ```
+
+### The two clocks
+
+`status` shows both limits the lab imposes, because either one ends the
+session:
+
+```console
+$ awsacademy status
+AUTH
+  ✓ session alive as Ada Lovelace
+
+LAB
+  ✓ running
+    course       AWS Academy Learner Lab
+    remaining    3h58m0s of session
+    budget       ████████░░░░░░░░░░░░  38%  $18.93 of $50.00
+
+AWS CLI
+    profile      academy
+    source       credential_process
+  ✓ valid credentials
+    arn          arn:aws:sts::123456789012:assumed-role/voclabs/user1234567
+    account      123456789012
+```
+
+The session countdown comes back tomorrow; the budget does not. The gauge turns
+yellow past 75% and red past 90%, where it also says how many dollars are left.
+Colour is dropped when the output is not a terminal, and honours `NO_COLOR`.
+
+The spend costs one extra request, because Vocareum serves it from its own
+endpoint rather than alongside the status; see step 6 of [How it works](#how-it-works).
+A lab that does not publish a budget simply does not show the line.
+
+### Opening the AWS console
+
+```console
+$ awsacademy console          # the console home
+$ awsacademy console ec2      # straight into EC2
+$ awsacademy console s3
+$ awsacademy console --print  # the sign-in URL, to open elsewhere
+```
+
+This is the console itself, not the Vocareum page with the *Start Lab* button.
+The lab credentials are exchanged for a browser session through AWS's
+[federation endpoint][federation] — the same mechanism the lab's own *AWS*
+button uses — and the browser lands already signed in, with no password
+anywhere.
+
+[federation]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_enable-console-custom-url.html
+
+It uses the credentials already on disk and only goes back to the lab when they
+have expired. It never brings the lab up: if it is stopped it says so and points
+at `start`.
+
+> The URL that `--print` writes carries a sign-in token that grants access to
+> the lab account for as long as the lab lives. Treat it like a password.
+
+On a machine with no desktop — over SSH, in a container — there is nothing to
+open, so it prints the URL instead of failing.
 
 ### Avoiding `--profile` on every command
 
@@ -137,6 +198,21 @@ service:
    `getaws`. Those URLs carry a `stepid` specific to the session, so they
    **cannot be compiled in as constants**: they are read from the lab page,
    which is where its own buttons declare them.
+6. **The budget is a second answer to the same call.** `a=getaws` returns the
+   credentials panel as HTML, but the *same* action with `v=3` returns the
+   spend as JSON — `{"total_budget":"50.00","monthly_budget":0,"total_spend":
+   "0.014342",…}`, with the amounts quoted and an absent allowance as a bare
+   `0`. It cannot be discovered by reading the page: the page builds that URL
+   by concatenation (`"…&v=" + v`), so `v=3` never appears as a literal. It is
+   derived from the credentials endpoint instead. A monthly allowance, when
+   there is one, wins over the total — which is the rule the page's own
+   `budgetString2` follows.
+7. **Console federation.** `console` does not drive a browser either: it posts
+   the lab's temporary credentials to `signin.aws.amazon.com/federation` for a
+   sign-in token, builds the login URL around it and hands that single URL to
+   the desktop's opener (`xdg-open`, `open`, `rundll32`, or whatever `$BROWSER`
+   names). No `SessionDuration` is requested — AWS rejects it for role
+   credentials — so the console session dies with the lab session.
 
 **None of this is hardcoded.** The course changes every term, all the URLs change
 with it, and the session identifiers change on every launch. Everything is
